@@ -1,7 +1,6 @@
 package numeric
 
 import (
-	"math"
 	"math/rand"
 	"time"
 
@@ -25,7 +24,6 @@ func Linspace(start, stop float64, num int) []float64 {
 
 // sum rows of a matrix
 func SumRows(a *mat.Dense) *mat.Dense {
-
 	row := []float64{}
 	for i := 0; i < a.RawMatrix().Rows; i++ {
 		var sum float64
@@ -39,27 +37,12 @@ func SumRows(a *mat.Dense) *mat.Dense {
 }
 
 // add matrix with column vector
-func AddMatrixVector(M mat.Dense, b *mat.Dense) *mat.Dense {
-	out := []float64{}
-	for i := 0; i < M.RawMatrix().Rows; i++ {
-		row := []float64{}
-		for _, v := range M.RawRowView(i) {
-			row = append(row, v+b.RawMatrix().Data[i])
-		}
-		out = append(out, row...)
-	}
+func AddMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
+	m := new(mat.Dense)
+	fn := func(row, _ int, v float64) float64 { return v + b.At(row, 0) }
+	m.Apply(fn, a)
 
-	return mat.NewDense(M.RawMatrix().Rows, M.RawMatrix().Cols, out)
-}
-
-// calculate Tanh of a slice of float64
-func Tanh(M *mat.Dense) *mat.Dense {
-	values := []float64{}
-	for _, v := range M.RawMatrix().Data {
-		values = append(values, math.Tanh(v))
-	}
-
-	return mat.NewDense(M.RawMatrix().Rows, M.RawMatrix().Cols, values)
+	return m
 }
 
 // generate a random slice of float64
@@ -72,4 +55,69 @@ func Randn(n, m int) *mat.Dense {
 	}
 
 	return mat.NewDense(n, m, random)
+}
+
+// applies the function fn to each of the elements of a. The function fn takes a row/column
+// index and element value and returns some function of that tuple
+func Apply(fn func(i, j int, v float64) float64, a mat.Matrix) *mat.Dense {
+	m := new(mat.Dense)
+	m.Apply(fn, a)
+
+	return m
+}
+
+// multiply arguments element-wise by a scalar
+func Scale(f float64, a mat.Matrix) *mat.Dense {
+	m := new(mat.Dense)
+	m.Scale(f, a)
+
+	return m
+}
+
+// addition arguments, element-wise.
+func Add(a, b mat.Matrix) *mat.Dense {
+	m := new(mat.Dense)
+	m.Add(a, b)
+
+	return m
+}
+
+// division arguments, element-wise.
+func DivElem(a, b mat.Matrix) *mat.Dense {
+	m := new(mat.Dense)
+	m.DivElem(a, b)
+
+	return m
+}
+
+// subtract arguments, element-wise.
+func Sub(a, b mat.Matrix) *mat.Dense {
+	m := new(mat.Dense)
+	m.Sub(a, b)
+
+	return m
+}
+
+// matrix product of two arrays
+func MatMul(a, b mat.Matrix) *mat.Dense {
+	m := new(mat.Dense)
+	m.Mul(a, b)
+
+	return m
+}
+
+// return the element-wise square of the input.
+func Square(a mat.Matrix) *mat.Dense {
+	m := new(mat.Dense)
+	m.MulElem(a, a)
+
+	return m
+}
+
+// multiply arguments element-wise
+func Multiply(a, b mat.Matrix) *mat.Dense {
+	m := new(mat.Dense)
+	m.MulElem(a, b)
+
+	return m
 }

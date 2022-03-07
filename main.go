@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	model "deep_learning/neuralNetwork"
+	network "deep_learning/neuralNetwork"
 	ngo "deep_learning/numeric"
 
 	"gonum.org/v1/gonum/mat"
@@ -13,23 +13,30 @@ import (
 func main() {
 
 	// training data
+	applySin := func(_, _ int, v float64) float64 { return math.Sin(15. * v) }
 	x_train := mat.NewDense(1, 301, ngo.Linspace(0., 1., 301))
-	values := []float64{}
-	for _, v := range x_train.RawMatrix().Data {
-		values = append(values, math.Sin(15.*v))
-	}
-	y_train := mat.NewDense(1, 301, values)
+	y_train := ngo.Apply(applySin, x_train)
 
 	// hyperparameters
-	nn_structure := []int{1, 40, 20, 10, 1}
+	input_dim := x_train.RawMatrix().Rows
+	output_dim := y_train.RawMatrix().Rows
+
+	nn_structure := []int{input_dim, 40, 20, 10, output_dim}
+	activation_function := network.ActivationTanh
 	num_iterations := 40001
 	learning_rate := 0.08
 
 	// neural network model
-	parameters, _ := model.Fit(x_train, y_train, nn_structure, num_iterations, learning_rate, true)
+	model := network.NewNeuralNetwork(
+		nn_structure,
+		activation_function,
+		num_iterations,
+		learning_rate,
+	)
+	model.Fit(x_train, y_train, true)
 
 	// make predictions
-	predictions := model.Predict(parameters, x_train)
+	predictions := model.Predict(x_train)
 	fmt.Println(predictions.Dims())
 
 }
