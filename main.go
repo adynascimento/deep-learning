@@ -23,16 +23,19 @@ func main() {
 
 	nn_structure := []int{input_dim, 40, 20, 10, output_dim}
 	activation_function := network.ActivationTanh
-	num_iterations := 40001
-	learning_rate := 0.08
+	optimizer := network.AdamOptimizer
+	learning_rate := 0.001
+	num_iterations := 10000
 
 	// neural network model
 	model := network.NewNeuralNetwork(
 		nn_structure,
 		activation_function,
 		num_iterations,
-		learning_rate,
 	)
+
+	// optimizer to train the model
+	model.NewTrainer(optimizer, learning_rate)
 	model.Fit(x_train, y_train, true)
 
 	// make predictions

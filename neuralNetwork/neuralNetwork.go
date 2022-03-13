@@ -13,14 +13,16 @@ import (
 
 type neuralNetwork struct {
 	nn_structure   []int
-	num_iterations int
-	learning_rate  float64
 	activation     activation
+	optimizer      optimizer
+	learning_rate  float64
+	num_iterations int
 	parameters     map[string]*mat.Dense
 }
 
-func NewNeuralNetwork(nn_structure []int, actOpt actType, num_iterations int, learning_rate float64) neuralNetwork {
+func NewNeuralNetwork(nn_structure []int, actOpt actType, num_iterations int) neuralNetwork {
 
+	// choice of activation function
 	act := activation{}
 	switch actOpt {
 	case ActivationTanh:
@@ -31,12 +33,31 @@ func NewNeuralNetwork(nn_structure []int, actOpt actType, num_iterations int, le
 		act = activation{function: eluActivation, derivative: eluPrimeActivation}
 	}
 
+	// initializing the model parameters
+	parameters := initializeParameters(nn_structure)
+
 	return neuralNetwork{
 		nn_structure:   nn_structure,
-		num_iterations: num_iterations,
-		learning_rate:  learning_rate,
 		activation:     act,
+		num_iterations: num_iterations,
+		parameters:     parameters,
 	}
+}
+
+func (network *neuralNetwork) NewTrainer(opt optType, learning_rate float64)  {
+	// choice of optimization algorithm
+	optimizer := optimizer{}
+	switch opt {
+	case GradientDescentOptimizer:
+		optimizer.optimizerFunction = optimizer.gradientDescentOptimizer
+	case AdamOptimizer:
+		v, s := initializeAdam(network.parameters)
+		optimizer.optimizerFunction = optimizer.adamOptimizer
+		optimizer.adam = adam{v: v, s: s}
+	}
+
+	network.optimizer = optimizer
+	network.learning_rate = learning_rate
 }
 
 // initializing the model parameters
@@ -61,11 +82,10 @@ func forwardPropagation(parameters map[string]*mat.Dense, x *mat.Dense, actFunc 
 	A := make(map[string]*mat.Dense) // activation function
 	A[strconv.Itoa(0)] = x
 
+	applyActFunction := func(_, _ int, v float64) float64 { return actFunc(v) }
 	for l := 0; l < L; l++ {
 		W := parameters["W"+strconv.Itoa(l+1)] // weights W
 		b := parameters["b"+strconv.Itoa(l+1)] // biases b
-
-		applyActFunction := func(_, _ int, v float64) float64 { return actFunc(v) }
 
 		Z[strconv.Itoa(l+1)] = ngo.AddMatrixVector(ngo.MatMul(W, A[strconv.Itoa(l)]), b) // compute the linear operation
 		A[strconv.Itoa(l+1)] = ngo.Apply(applyActFunction, Z[strconv.Itoa(l+1)])         // compute the non linear operation
@@ -99,9 +119,8 @@ func backwardPropagation(parameters, Z, A map[string]*mat.Dense, y, y_hat *mat.D
 	dW[strconv.Itoa(L)] = ngo.MatMul(dZ[strconv.Itoa(L)], A[strconv.Itoa(L-1)].T())
 	db[strconv.Itoa(L)] = ngo.SumRows(dZ[strconv.Itoa(L)])
 
+	applyActPrimeFunction := func(_, _ int, v float64) float64 { return actPrimeFunc(v) }
 	for l := L - 1; l > 0; l-- {
-		applyActPrimeFunction := func(_, _ int, v float64) float64 { return actPrimeFunc(v) }
-
 		dA[strconv.Itoa(l)] = ngo.MatMul(parameters["W"+strconv.Itoa(l+1)].T(), dZ[strconv.Itoa(l+1)])
 		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], ngo.Apply(applyActPrimeFunction, Z[strconv.Itoa(l)]))
 		dW[strconv.Itoa(l)] = ngo.MatMul(dZ[strconv.Itoa(l)], A[strconv.Itoa(l-1)].T())
@@ -109,18 +128,6 @@ func backwardPropagation(parameters, Z, A map[string]*mat.Dense, y, y_hat *mat.D
 	}
 
 	return dW, db
-}
-
-// update the parameters (gradient descent)
-func updateParameters(parameters, dW, db map[string]*mat.Dense, learning_rate float64) map[string]*mat.Dense {
-	L := len(parameters) / 2 // number of layers
-
-	for l := 0; l < L; l++ {
-		parameters["W"+strconv.Itoa(l+1)] = ngo.Sub(parameters["W"+strconv.Itoa(l+1)], ngo.Scale(learning_rate, dW[strconv.Itoa(l+1)]))
-		parameters["b"+strconv.Itoa(l+1)] = ngo.Sub(parameters["b"+strconv.Itoa(l+1)], ngo.Scale(learning_rate, db[strconv.Itoa(l+1)]))
-	}
-
-	return parameters
 }
 
 // train model
@@ -131,11 +138,8 @@ func (network *neuralNetwork) Fit(x_train, y_train *mat.Dense, print_cost bool) 
 	// keep track of the cost
 	costs := []float64{}
 
-	// initializing the model parameters
-	network.parameters = initializeParameters(network.nn_structure)
-
 	// loop
-	for i := 0; i < network.num_iterations; i++ {
+	for i := 1; i <= network.num_iterations; i++ {
 		// forward propagation
 		y_hat, Z, A := forwardPropagation(network.parameters, x_train, network.activation.function)
 
@@ -145,11 +149,11 @@ func (network *neuralNetwork) Fit(x_train, y_train *mat.Dense, print_cost bool) 
 		// backward propagation
 		dW, db := backwardPropagation(network.parameters, Z, A, y_train, y_hat, network.activation.derivative)
 
-		// update parameters (gradient descent)
-		network.parameters = updateParameters(network.parameters, dW, db, network.learning_rate)
+		// update parameters (optimization algorithm)
+		network.parameters = network.optimizer.optimizerFunction(network.parameters, dW, db, network.learning_rate, float64(i))
 
 		// print the cost every 1000 iterations
-		if print_cost && i%1000 == 0 {
+		if print_cost && i%1000 == 0 || print_cost && i == 1 {
 			fmt.Printf("it %d: | t: %.2fs | cost: %f \n", i, time.Since(start).Seconds(), cost)
 			costs = append(costs, cost)
 		}
