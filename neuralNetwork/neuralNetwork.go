@@ -12,15 +12,16 @@ import (
 )
 
 type neuralNetwork struct {
-	nn_structure   []int
-	activation     activation
-	optimizer      optimizer
-	learning_rate  float64
-	num_iterations int
-	parameters     map[string]*mat.Dense
+	nn_structure      []int
+	activation        activation
+	optimizer         optimizer
+	learning_rate     float64
+	l2_regularization float64
+	num_iterations    int
+	parameters        map[string]*mat.Dense
 }
 
-func NewNeuralNetwork(nn_structure []int, actOpt actType, num_iterations int) neuralNetwork {
+func NewNeuralNetwork(nn_structure []int, actOpt actType, l2_reg float64, num_iterations int) neuralNetwork {
 
 	// choice of activation function
 	act := activation{}
@@ -37,14 +38,15 @@ func NewNeuralNetwork(nn_structure []int, actOpt actType, num_iterations int) ne
 	parameters := initializeParameters(nn_structure)
 
 	return neuralNetwork{
-		nn_structure:   nn_structure,
-		activation:     act,
-		num_iterations: num_iterations,
-		parameters:     parameters,
+		nn_structure:      nn_structure,
+		activation:        act,
+		l2_regularization: l2_reg,
+		num_iterations:    num_iterations,
+		parameters:        parameters,
 	}
 }
 
-func (network *neuralNetwork) NewTrainer(opt optType, learning_rate float64)  {
+func (network *neuralNetwork) NewTrainer(opt optType, learning_rate float64) {
 	// choice of optimization algorithm
 	optimizer := optimizer{}
 	switch opt {
@@ -98,15 +100,23 @@ func forwardPropagation(parameters map[string]*mat.Dense, x *mat.Dense, actFunc 
 }
 
 // computing the cost function
-func costFunction(y_hat, y *mat.Dense) float64 {
+func costFunction(y_hat, y *mat.Dense, parameters map[string]*mat.Dense, lambd float64) float64 {
 	m := y_hat.RawMatrix().Cols
-	sum := mat.Sum(ngo.Square(ngo.Sub(y_hat, y)))
+	cost := mat.Sum(ngo.Square(ngo.Sub(y_hat, y)))
 
-	return (1.0 / (2.0 * float64(m)) * sum)
+	// l2 regularization cost
+	L := len(parameters) / 2 // number of layers
+	var sum float64
+	for l := 0; l < L; l++ {
+		sum = sum + mat.Sum(ngo.Square(parameters["W"+strconv.Itoa(l+1)]))
+	}
+	cost = cost + lambd*sum
+
+	return (1.0 / (2.0 * float64(m)) * cost)
 }
 
 // backward propagation step
-func backwardPropagation(parameters, Z, A map[string]*mat.Dense, y, y_hat *mat.Dense, actPrimeFunc activationFunction) (map[string]*mat.Dense, map[string]*mat.Dense) {
+func backwardPropagation(parameters, Z, A map[string]*mat.Dense, y, y_hat *mat.Dense, actPrimeFunc activationFunction, lambd float64) (map[string]*mat.Dense, map[string]*mat.Dense) {
 	m := y.RawMatrix().Cols  // number of training examples
 	L := len(parameters) / 2 // number of layers
 
@@ -116,14 +126,14 @@ func backwardPropagation(parameters, Z, A map[string]*mat.Dense, y, y_hat *mat.D
 	dA := make(map[string]*mat.Dense) // derivatives of the activation function A
 
 	dZ[strconv.Itoa(L)] = ngo.Scale(1./float64(m), ngo.Sub(y_hat, y))
-	dW[strconv.Itoa(L)] = ngo.MatMul(dZ[strconv.Itoa(L)], A[strconv.Itoa(L-1)].T())
+	dW[strconv.Itoa(L)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(L)], A[strconv.Itoa(L-1)].T()), ngo.Scale(lambd/float64(m), parameters["W"+strconv.Itoa(L)]))
 	db[strconv.Itoa(L)] = ngo.SumRows(dZ[strconv.Itoa(L)])
 
 	applyActPrimeFunction := func(_, _ int, v float64) float64 { return actPrimeFunc(v) }
 	for l := L - 1; l > 0; l-- {
 		dA[strconv.Itoa(l)] = ngo.MatMul(parameters["W"+strconv.Itoa(l+1)].T(), dZ[strconv.Itoa(l+1)])
 		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], ngo.Apply(applyActPrimeFunction, Z[strconv.Itoa(l)]))
-		dW[strconv.Itoa(l)] = ngo.MatMul(dZ[strconv.Itoa(l)], A[strconv.Itoa(l-1)].T())
+		dW[strconv.Itoa(l)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(l)], A[strconv.Itoa(l-1)].T()), ngo.Scale(lambd/float64(m), parameters["W"+strconv.Itoa(l)]))
 		db[strconv.Itoa(l)] = ngo.SumRows(dZ[strconv.Itoa(l)])
 	}
 
@@ -144,10 +154,10 @@ func (network *neuralNetwork) Fit(x_train, y_train *mat.Dense, print_cost bool) 
 		y_hat, Z, A := forwardPropagation(network.parameters, x_train, network.activation.function)
 
 		// cost function
-		cost := costFunction(y_hat, y_train)
+		cost := costFunction(y_hat, y_train, network.parameters, network.l2_regularization)
 
 		// backward propagation
-		dW, db := backwardPropagation(network.parameters, Z, A, y_train, y_hat, network.activation.derivative)
+		dW, db := backwardPropagation(network.parameters, Z, A, y_train, y_hat, network.activation.derivative, network.l2_regularization)
 
 		// update parameters (optimization algorithm)
 		network.parameters = network.optimizer.optimizerFunction(network.parameters, dW, db, network.learning_rate, float64(i))

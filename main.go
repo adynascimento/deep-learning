@@ -25,12 +25,14 @@ func main() {
 	activation_function := network.ActivationTanh
 	optimizer := network.AdamOptimizer
 	learning_rate := 0.001
+	l2_regularization := 1.40e-06
 	num_iterations := 10000
 
 	// neural network model
 	model := network.NewNeuralNetwork(
 		nn_structure,
 		activation_function,
+		l2_regularization,
 		num_iterations,
 	)
 
