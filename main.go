@@ -24,8 +24,6 @@ func main() {
 	// hyperparameters
 	nn_structure := []int{input_dim, 40, 20, 10, output_dim}
 	activation_function := network.ActivationTanh
-	optimizer := network.AdamOptimizer
-	learning_rate := 0.001
 	l2_regularization := 1.40e-06
 	num_iterations := 10000
 
@@ -38,16 +36,17 @@ func main() {
 	)
 
 	// optimizer to train the model
-	model.NewTrainer(optimizer, learning_rate)
+	learning_rate := 0.001
+	model.NewTrainer(network.AdamOptimizer, learning_rate)
 	model.Fit(x_train, y_train, true)
 
 	// saves neural network model to file
-	// model.Save("model.json")
-
-	// load neural network model from file
-	// model := network.Load("model.json")
+	model.Save("model.json")
 
 	// make predictions
 	predictions := model.Predict(x_train)
 	fmt.Println(predictions.Dims())
+
+	// load neural network model from file
+	// model := network.Load("model.json")
 }
