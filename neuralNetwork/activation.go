@@ -2,17 +2,18 @@ package neuralNetwork
 
 import "math"
 
-type actType string
+type activationType string
 
 const (
-	ActivationTanh    actType = "tanh"
-	ActivationSigmoid actType = "sigmoid"
-	ActivationElu     actType = "elu"
+	ActivationTanh    activationType = "tanh"
+	ActivationSigmoid activationType = "sigmoid"
+	ActivationElu     activationType = "elu"
 )
 
 type activationFunction func(float64) float64
 
 type activation struct {
+	name       activationType
 	function   activationFunction
 	derivative activationFunction
 }

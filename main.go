@@ -17,10 +17,11 @@ func main() {
 	x_train := mat.NewDense(1, 301, ngo.Linspace(0., 1., 301))
 	y_train := ngo.Apply(applySin, x_train)
 
-	// hyperparameters
+	// input and output features
 	input_dim := x_train.RawMatrix().Rows
 	output_dim := y_train.RawMatrix().Rows
 
+	// hyperparameters
 	nn_structure := []int{input_dim, 40, 20, 10, output_dim}
 	activation_function := network.ActivationTanh
 	optimizer := network.AdamOptimizer
@@ -40,8 +41,13 @@ func main() {
 	model.NewTrainer(optimizer, learning_rate)
 	model.Fit(x_train, y_train, true)
 
+	// saves neural network model to file
+	// model.Save("model.json")
+
+	// load neural network model from file
+	// model := network.Load("model.json")
+
 	// make predictions
 	predictions := model.Predict(x_train)
 	fmt.Println(predictions.Dims())
-
 }

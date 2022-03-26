@@ -8,11 +8,11 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
-type optType string
+type optimizerType string
 
 const (
-	AdamOptimizer            optType = "adam"
-	GradientDescentOptimizer optType = "gradientDescent"
+	AdamOptimizer            optimizerType = "adam"
+	GradientDescentOptimizer optimizerType = "gradientDescent"
 )
 
 type optimizerFunction func(map[string]*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense, float64, float64) map[string]*mat.Dense
@@ -23,6 +23,7 @@ type adam struct {
 }
 
 type optimizer struct {
+	name              optimizerType
 	optimizerFunction optimizerFunction
 	adam              adam
 }
@@ -78,16 +79,16 @@ func (model *optimizer) adamOptimizer(parameters, dW, db map[string]*mat.Dense, 
 		model.adam.v["db"+strconv.Itoa(l+1)] = ngo.Add(ngo.Scale(beta_1, model.adam.v["db"+strconv.Itoa(l+1)]), ngo.Scale((1-beta_1), db[strconv.Itoa(l+1)]))
 
 		// compute bias-corrected first moment estimate
-		vCorr["dW"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0 - math.Pow(beta_1, t)), model.adam.v["dW"+strconv.Itoa(l+1)])
-		vCorr["db"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0 - math.Pow(beta_1, t)), model.adam.v["db"+strconv.Itoa(l+1)])
+		vCorr["dW"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0-math.Pow(beta_1, t)), model.adam.v["dW"+strconv.Itoa(l+1)])
+		vCorr["db"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0-math.Pow(beta_1, t)), model.adam.v["db"+strconv.Itoa(l+1)])
 
 		// moving average of the squared gradients
 		model.adam.s["dW"+strconv.Itoa(l+1)] = ngo.Add(ngo.Scale(beta_2, model.adam.s["dW"+strconv.Itoa(l+1)]), ngo.Scale((1.0-beta_2), ngo.Square(dW[strconv.Itoa(l+1)])))
 		model.adam.s["db"+strconv.Itoa(l+1)] = ngo.Add(ngo.Scale(beta_2, model.adam.s["db"+strconv.Itoa(l+1)]), ngo.Scale((1.0-beta_2), ngo.Square(db[strconv.Itoa(l+1)])))
 
 		// compute bias-corrected second raw moment estimate
-		sCorr["dW"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0 - math.Pow(beta_2, t)), model.adam.s["dW"+strconv.Itoa(l+1)])
-		sCorr["db"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0 - math.Pow(beta_2, t)), model.adam.s["db"+strconv.Itoa(l+1)])
+		sCorr["dW"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0-math.Pow(beta_2, t)), model.adam.s["dW"+strconv.Itoa(l+1)])
+		sCorr["db"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0-math.Pow(beta_2, t)), model.adam.s["db"+strconv.Itoa(l+1)])
 
 		sqrtW := ngo.Apply(func(_, _ int, v float64) float64 { return v + epsilon }, ngo.Apply(applySqrt, sCorr["dW"+strconv.Itoa(l+1)]))
 		sqrtb := ngo.Apply(func(_, _ int, v float64) float64 { return v + epsilon }, ngo.Apply(applySqrt, sCorr["db"+strconv.Itoa(l+1)]))

@@ -21,17 +21,17 @@ type neuralNetwork struct {
 	parameters        map[string]*mat.Dense
 }
 
-func NewNeuralNetwork(nn_structure []int, actOpt actType, l2_reg float64, num_iterations int) neuralNetwork {
+func NewNeuralNetwork(nn_structure []int, actOpt activationType, l2_regularization float64, num_iterations int) neuralNetwork {
 
 	// choice of activation function
-	act := activation{}
+	activation_function := activation{}
 	switch actOpt {
 	case ActivationTanh:
-		act = activation{function: tanhActivation, derivative: tanhPrimeActivation}
+		activation_function = activation{name: actOpt, function: tanhActivation, derivative: tanhPrimeActivation}
 	case ActivationSigmoid:
-		act = activation{function: sigmoidActivation, derivative: sigmoidPrimeActivation}
+		activation_function = activation{name: actOpt, function: sigmoidActivation, derivative: sigmoidPrimeActivation}
 	case ActivationElu:
-		act = activation{function: eluActivation, derivative: eluPrimeActivation}
+		activation_function = activation{name: actOpt, function: eluActivation, derivative: eluPrimeActivation}
 	}
 
 	// initializing the model parameters
@@ -39,20 +39,22 @@ func NewNeuralNetwork(nn_structure []int, actOpt actType, l2_reg float64, num_it
 
 	return neuralNetwork{
 		nn_structure:      nn_structure,
-		activation:        act,
-		l2_regularization: l2_reg,
+		activation:        activation_function,
+		l2_regularization: l2_regularization,
 		num_iterations:    num_iterations,
 		parameters:        parameters,
 	}
 }
 
-func (network *neuralNetwork) NewTrainer(opt optType, learning_rate float64) {
+func (network *neuralNetwork) NewTrainer(opt optimizerType, learning_rate float64) {
 	// choice of optimization algorithm
 	optimizer := optimizer{}
 	switch opt {
 	case GradientDescentOptimizer:
+		optimizer.name = opt
 		optimizer.optimizerFunction = optimizer.gradientDescentOptimizer
 	case AdamOptimizer:
+		optimizer.name = opt
 		v, s := initializeAdam(network.parameters)
 		optimizer.optimizerFunction = optimizer.adamOptimizer
 		optimizer.adam = adam{v: v, s: s}
@@ -164,7 +166,7 @@ func (network *neuralNetwork) Fit(x_train, y_train *mat.Dense, print_cost bool) 
 
 		// print the cost every 1000 iterations
 		if print_cost && i%1000 == 0 || print_cost && i == 1 {
-			fmt.Printf("it %d: | t: %.2fs | cost: %f \n", i, time.Since(start).Seconds(), cost)
+			fmt.Printf("it %d: | t: %.2fs | cost: %e \n", i, time.Since(start).Seconds(), cost)
 			costs = append(costs, cost)
 		}
 	}
