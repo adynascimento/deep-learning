@@ -22,10 +22,10 @@ func main() {
 	output_dim := y_train.RawMatrix().Rows
 
 	// hyperparameters
-	nn_structure := []int{input_dim, 40, 20, 10, output_dim}
-	activation_function := network.ActivationTanh
-	l2_regularization := 1.40e-06
-	num_iterations := 10000
+	nn_structure := []int{input_dim, 40, 20, 10, output_dim} // neural network structure
+	activation_function := network.ActivationTanh            // activation function
+	l2_regularization := 1.40e-06                            // regularization parameter
+	num_iterations := 10000                                  // number of iterations
 
 	// neural network model
 	model := network.NewNeuralNetwork(

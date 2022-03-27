@@ -22,7 +22,6 @@ type neuralNetwork struct {
 }
 
 func NewNeuralNetwork(nn_structure []int, actOpt activationType, l2_regularization float64, num_iterations int) neuralNetwork {
-
 	// choice of activation function
 	activation_function := activation{}
 	switch actOpt {
@@ -144,7 +143,6 @@ func backwardPropagation(parameters, Z, A map[string]*mat.Dense, y, y_hat *mat.D
 
 // train model
 func (network *neuralNetwork) Fit(x_train, y_train *mat.Dense, print_cost bool) []float64 {
-
 	start := time.Now()
 
 	// keep track of the cost

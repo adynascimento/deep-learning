@@ -40,7 +40,7 @@ func (model *optimizer) gradientDescentOptimizer(parameters, dW, db map[string]*
 	return parameters
 }
 
-// initializing the model parameters
+// initializing the adam model parameters
 func initializeAdam(parameters map[string]*mat.Dense) (map[string]*mat.Dense, map[string]*mat.Dense) {
 	L := len(parameters) / 2         // number of layers
 	v := make(map[string]*mat.Dense) // map containing the parameters
@@ -59,7 +59,7 @@ func initializeAdam(parameters map[string]*mat.Dense) (map[string]*mat.Dense, ma
 	return v, s
 }
 
-// update the parameters (gradient descent)
+// update the parameters (adam optimizer)
 func (model *optimizer) adamOptimizer(parameters, dW, db map[string]*mat.Dense, learning_rate, t float64) map[string]*mat.Dense {
 	// default parameters
 	beta_1 := 0.9
