@@ -6,6 +6,7 @@ import (
 
 	network "deep_learning/neuralNetwork"
 	ngo "deep_learning/numeric"
+	"deep_learning/plot"
 
 	"gonum.org/v1/gonum/mat"
 )
@@ -46,6 +47,19 @@ func main() {
 	// make predictions
 	predictions := model.Predict(x_train)
 	fmt.Println(predictions.Dims())
+
+	// plotting
+	plt := plot.NewPlot()
+	plt.FigSize(15, 8)
+
+	plt.Plot(x_train.RawMatrix().Data, y_train.RawMatrix().Data)
+	plt.Plot(x_train.RawMatrix().Data, predictions.RawMatrix().Data)
+	plt.Title("neural network predictions")
+	plt.XLabel("x values")
+	plt.YLabel("y values")
+	plt.Legend("real value", "predicted value")
+
+	plt.Save("plot.png")
 
 	// load neural network model from file
 	// model := network.Load("model.json")
