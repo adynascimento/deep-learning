@@ -14,8 +14,8 @@ import (
 var colors = []color.Color{
 	color.RGBA{0.0, 0.0, 0.0, 255},
 	color.RGBA{255, 0.0, 0.0, 255},
-	color.RGBA{122, 195, 106, 255},
 	color.RGBA{90, 155, 212, 255},
+	color.RGBA{122, 195, 106, 255},
 	color.RGBA{250, 167, 91, 255},
 	color.RGBA{158, 103, 171, 255},
 	color.RGBA{206, 112, 88, 255},

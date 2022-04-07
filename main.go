@@ -42,7 +42,7 @@ func main() {
 	model.Fit(x_train, y_train, true)
 
 	// saves neural network model to file
-	model.Save("model.json")
+	model.Save("savedModel.json")
 
 	// make predictions
 	predictions := model.Predict(x_train)
@@ -57,7 +57,7 @@ func main() {
 	plt.Title("neural network predictions")
 	plt.XLabel("x values")
 	plt.YLabel("y values")
-	plt.Legend("real", "predicted")
+	plt.Legend("true model", "prediction")
 	plt.XLim( 0.0, 1.0)
 	plt.YLim(-1.0, 1.0)
 
