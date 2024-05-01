@@ -2,8 +2,8 @@ package neuralNetwork
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"log"
+	"os"
 )
 
 type model struct {
@@ -44,7 +44,7 @@ func (network *neuralNetwork) Save(path string) {
 		log.Println("impossible to save neural network model on file:", err.Error())
 	}
 
-	err = ioutil.WriteFile(path, b, 0644)
+	err = os.WriteFile(path, b, 0644)
 	if err != nil {
 		log.Println("impossible to save neural network model on file:", err.Error())
 	}

@@ -2,8 +2,8 @@ package neuralNetwork
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"log"
+	"os"
 	"strconv"
 
 	"gonum.org/v1/gonum/mat"
@@ -37,7 +37,7 @@ func toNetwork(model model) neuralNetwork {
 }
 
 func Load(path string) neuralNetwork {
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if nil != err {
 		log.Println("impossible to load neural network model from file: ", err.Error())
 	}

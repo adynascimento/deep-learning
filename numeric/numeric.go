@@ -2,7 +2,6 @@ package numeric
 
 import (
 	"math/rand"
-	"time"
 
 	"gonum.org/v1/gonum/mat"
 )
@@ -47,9 +46,7 @@ func AddMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
 
 // generate a random slice of float64
 func Randn(n, m int) *mat.Dense {
-	rand.Seed(time.Now().Unix())
 	random := []float64{}
-
 	for i := 0; i < n*m; i++ {
 		random = append(random, rand.NormFloat64())
 	}

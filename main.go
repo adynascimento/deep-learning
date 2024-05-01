@@ -6,13 +6,12 @@ import (
 
 	network "deep_learning/neuralNetwork"
 	ngo "deep_learning/numeric"
-	"deep_learning/plot"
 
+	"github.com/adyllyson-gomes/plot/plot"
 	"gonum.org/v1/gonum/mat"
 )
 
 func main() {
-
 	// training data
 	applySin := func(_, _ int, v float64) float64 { return math.Sin(15. * v) }
 	x_train := mat.NewDense(1, 301, ngo.Linspace(0., 1., 301))
@@ -42,7 +41,7 @@ func main() {
 	model.Fit(x_train, y_train, true)
 
 	// saves neural network model to file
-	model.Save("savedModel.json")
+	model.Save("model.json")
 
 	// make predictions
 	predictions := model.Predict(x_train)
@@ -58,9 +57,8 @@ func main() {
 	plt.XLabel("x values")
 	plt.YLabel("y values")
 	plt.Legend("true model", "prediction")
-	plt.XLim( 0.0, 1.0)
+	plt.XLim(0.0, 1.0)
 	plt.YLim(-1.0, 1.0)
 
 	plt.Save("plot.png")
-
 }

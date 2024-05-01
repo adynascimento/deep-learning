@@ -3,8 +3,8 @@ module deep_learning
 go 1.17
 
 require (
+	github.com/adyllyson-gomes/plot v1.0.1
 	gonum.org/v1/gonum v0.11.0
-	gonum.org/v1/plot v0.11.0
 )
 
 require (
@@ -14,6 +14,10 @@ require (
 	github.com/go-latex/latex v0.0.0-20210823091927-c0d11ff05a81 // indirect
 	github.com/go-pdf/fpdf v0.6.0 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
+	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
+	github.com/mazznoer/colorgrad v0.8.1 // indirect
+	github.com/mazznoer/csscolorparser v0.1.0 // indirect
 	golang.org/x/image v0.0.0-20220302094943-723b81ca9867 // indirect
 	golang.org/x/text v0.3.7 // indirect
+	gonum.org/v1/plot v0.11.0 // indirect
 )
