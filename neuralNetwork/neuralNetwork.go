@@ -86,16 +86,19 @@ func forwardPropagation(parameters map[string]*mat.Dense, x *mat.Dense, actFunc 
 	A[strconv.Itoa(0)] = x
 
 	applyActFunction := func(_, _ int, v float64) float64 { return actFunc(v) }
-	for l := 0; l < L; l++ {
+	for l := 0; l < L-1; l++ {
 		W := parameters["W"+strconv.Itoa(l+1)] // weights W
 		b := parameters["b"+strconv.Itoa(l+1)] // biases b
 
 		Z[strconv.Itoa(l+1)] = ngo.AddMatrixVector(ngo.MatMul(W, A[strconv.Itoa(l)]), b) // compute the linear operation
 		A[strconv.Itoa(l+1)] = ngo.Apply(applyActFunction, Z[strconv.Itoa(l+1)])         // compute the non linear operation
 	}
+	// for output layer
+	Z[strconv.Itoa(L)] = ngo.AddMatrixVector(ngo.MatMul(parameters["W"+strconv.Itoa(L)], A[strconv.Itoa(L-1)]), parameters["b"+strconv.Itoa(L)])
+	A[strconv.Itoa(L)] = Z[strconv.Itoa(L)]
 
 	// prediction
-	y_hat := Z[strconv.Itoa(L)]
+	y_hat := A[strconv.Itoa(L)]
 
 	return y_hat, Z, A
 }
@@ -117,7 +120,7 @@ func costFunction(y_hat, y *mat.Dense, parameters map[string]*mat.Dense, lambd f
 }
 
 // backward propagation step
-func backwardPropagation(parameters, Z, A map[string]*mat.Dense, y, y_hat *mat.Dense, actPrimeFunc activationFunction, lambd float64) (map[string]*mat.Dense, map[string]*mat.Dense) {
+func backwardPropagation(parameters, Z, A map[string]*mat.Dense, y *mat.Dense, actPrimeFunc activationFunction, lambd float64) (map[string]*mat.Dense, map[string]*mat.Dense) {
 	m := y.RawMatrix().Cols  // number of training examples
 	L := len(parameters) / 2 // number of layers
 
@@ -126,7 +129,7 @@ func backwardPropagation(parameters, Z, A map[string]*mat.Dense, y, y_hat *mat.D
 	db := make(map[string]*mat.Dense) // derivatives of the biases b
 	dA := make(map[string]*mat.Dense) // derivatives of the activation function A
 
-	dZ[strconv.Itoa(L)] = ngo.Scale(1./float64(m), ngo.Sub(y_hat, y))
+	dZ[strconv.Itoa(L)] = ngo.Scale(1./float64(m), ngo.Sub(A[strconv.Itoa(L)], y))
 	dW[strconv.Itoa(L)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(L)], A[strconv.Itoa(L-1)].T()), ngo.Scale(lambd/float64(m), parameters["W"+strconv.Itoa(L)]))
 	db[strconv.Itoa(L)] = ngo.SumRows(dZ[strconv.Itoa(L)])
 
@@ -157,7 +160,7 @@ func (network *neuralNetwork) Fit(x_train, y_train *mat.Dense, print_cost bool) 
 		cost := costFunction(y_hat, y_train, network.parameters, network.l2_regularization)
 
 		// backward propagation
-		dW, db := backwardPropagation(network.parameters, Z, A, y_train, y_hat, network.activation.derivative, network.l2_regularization)
+		dW, db := backwardPropagation(network.parameters, Z, A, y_train, network.activation.derivative, network.l2_regularization)
 
 		// update parameters (optimization algorithm)
 		network.parameters = network.optimizer.optimizerFunction(network.parameters, dW, db, network.learning_rate, float64(i))

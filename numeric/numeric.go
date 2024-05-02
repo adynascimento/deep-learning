@@ -1,6 +1,7 @@
 package numeric
 
 import (
+	"math"
 	"math/rand"
 
 	"gonum.org/v1/gonum/mat"
@@ -35,13 +36,31 @@ func SumRows(a *mat.Dense) *mat.Dense {
 	return mat.NewDense(a.RawMatrix().Rows, 1, row)
 }
 
-// add matrix with column vector
+// add matrix with column vector row-wise
 func AddMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
 	m := new(mat.Dense)
 	fn := func(row, _ int, v float64) float64 { return v + b.At(row, 0) }
 	m.Apply(fn, a)
 
 	return m
+}
+
+// division matrix with column vector row-wise
+func DivMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
+	m := new(mat.Dense)
+	fn := func(row, _ int, v float64) float64 { return v / b.At(row, 0) }
+	m.Apply(fn, a)
+
+	return m
+}
+
+// applies softmax function of the input
+func ApplySoftmax(a *mat.Dense) *mat.Dense {
+	applyExp := func(_, _ int, v float64) float64 { return math.Exp(v) }
+	exp := Apply(applyExp, a)
+	sum := SumRows(exp)
+
+	return DivMatrixVector(exp, sum)
 }
 
 // generate a random slice of float64
