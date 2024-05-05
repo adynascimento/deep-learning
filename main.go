@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	network "deep_learning/neuralNetwork"
+	network "deep_learning/neuralnetwork"
 	ngo "deep_learning/numeric"
 
 	"github.com/adyllyson-gomes/plot/plot"
