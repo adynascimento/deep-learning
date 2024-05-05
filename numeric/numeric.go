@@ -1,7 +1,6 @@
 package numeric
 
 import (
-	"math"
 	"math/rand"
 
 	"gonum.org/v1/gonum/mat"
@@ -52,15 +51,6 @@ func DivMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
 	m.Apply(fn, a)
 
 	return m
-}
-
-// applies softmax function of the input
-func ApplySoftmax(a *mat.Dense) *mat.Dense {
-	applyExp := func(_, _ int, v float64) float64 { return math.Exp(v) }
-	exp := Apply(applyExp, a)
-	sum := SumRows(exp)
-
-	return DivMatrixVector(exp, sum)
 }
 
 // generate a random slice of float64

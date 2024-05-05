@@ -11,116 +11,168 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
-type neuralNetwork struct {
-	nn_structure      []int
-	activation        activation
-	optimizer         optimizer
-	learning_rate     float64
-	l2_regularization float64
-	num_iterations    int
-	parameters        map[string]*mat.Dense
+type NeuralConfig struct {
+	NNStructure []int
+	Activation  activationType
+	Mode        modeType
 }
 
-func NewNeuralNetwork(nn_structure []int, actOpt activationType, l2_regularization float64, num_iterations int) neuralNetwork {
+type neuralNetwork struct {
+	NNStructure      []int
+	Activation       activation
+	OutputActivation outputActivation
+	LossFunction     lossFunction
+	Parameters       map[string]*mat.Dense
+}
+
+func NewNeuralNetwork(config NeuralConfig) neuralNetwork {
 	// choice of activation function
-	activation_function := activation{}
-	switch actOpt {
+	activationFunction := activation{}
+	switch config.Activation {
 	case ActivationTanh:
-		activation_function = activation{name: actOpt, function: tanhActivation, derivative: tanhPrimeActivation}
+		activationFunction = activation{
+			Name:       config.Activation,
+			Function:   tanhActivation,
+			Derivative: tanhActivationDerivative,
+		}
 	case ActivationSigmoid:
-		activation_function = activation{name: actOpt, function: sigmoidActivation, derivative: sigmoidPrimeActivation}
+		activationFunction = activation{
+			Name:       config.Activation,
+			Function:   sigmoidActivation,
+			Derivative: sigmoidActivationDerivative,
+		}
 	case ActivationElu:
-		activation_function = activation{name: actOpt, function: eluActivation, derivative: eluPrimeActivation}
+		activationFunction = activation{
+			Name:       config.Activation,
+			Function:   eluActivation,
+			Derivative: eluActivationDerivative,
+		}
+	}
+
+	// choice of output layer activation function and loss
+	var lossFunction lossFunction
+	outputActivationFunction := outputActivation{}
+	switch config.Mode {
+	case ModeRegression:
+		outputActivationFunction = outputActivation{
+			Mode:     config.Mode,
+			Function: applyLinear,
+		}
+		lossFunction = meanSquareError
+	case ModeMultiClass:
+		outputActivationFunction = outputActivation{
+			Mode:     config.Mode,
+			Function: applySoftmax,
+		}
+		lossFunction = crossEntropy
+	case ModeMultiLabel:
+		outputActivationFunction = outputActivation{
+			Mode:     config.Mode,
+			Function: applySigmoid,
+		}
+		lossFunction = crossEntropy
+	case ModeBinary:
+		outputActivationFunction = outputActivation{
+			Mode:     config.Mode,
+			Function: applySigmoid,
+		}
+		lossFunction = binaryCrossEntropy
 	}
 
 	// initializing the model parameters
-	parameters := initializeParameters(nn_structure)
+	parameters := initializeParameters(config.NNStructure)
 
 	return neuralNetwork{
-		nn_structure:      nn_structure,
-		activation:        activation_function,
-		l2_regularization: l2_regularization,
-		num_iterations:    num_iterations,
-		parameters:        parameters,
+		NNStructure:      config.NNStructure,
+		Activation:       activationFunction,
+		OutputActivation: outputActivationFunction,
+		LossFunction:     lossFunction,
+		Parameters:       parameters,
 	}
 }
 
-func (network *neuralNetwork) NewTrainer(opt optimizerType, learning_rate float64) {
+type TrainerConfig struct {
+	Optimizer        optimizerType
+	LearningRate     float64
+	L2Regularization float64
+	NIterations      int
+}
+
+type neuralModel struct {
+	neuralNetwork
+	Optimizer        optimizer
+	LearningRate     float64
+	L2Regularization float64
+	NIterations      int
+}
+
+func NewTrainer(neural neuralNetwork, config TrainerConfig) neuralModel {
 	// choice of optimization algorithm
 	optimizer := optimizer{}
-	switch opt {
+	switch config.Optimizer {
 	case GradientDescentOptimizer:
-		optimizer.name = opt
-		optimizer.optimizerFunction = optimizer.gradientDescentOptimizer
+		optimizer.Name = config.Optimizer
+		optimizer.Function = optimizer.GradientDescentOptimizer
 	case AdamOptimizer:
-		optimizer.name = opt
-		v, s := initializeAdam(network.parameters)
-		optimizer.optimizerFunction = optimizer.adamOptimizer
-		optimizer.adam = adam{v: v, s: s}
+		optimizer.Name = config.Optimizer
+		optimizer.Function = optimizer.AdamOptimizer
+
+		v, s := initializeAdam(neural.Parameters)
+		optimizer.Adam = adamParameters{v: v, s: s}
 	}
 
-	network.optimizer = optimizer
-	network.learning_rate = learning_rate
+	return neuralModel{
+		neuralNetwork:    neural,
+		Optimizer:        optimizer,
+		LearningRate:     config.LearningRate,
+		L2Regularization: config.L2Regularization,
+		NIterations:      config.NIterations,
+	}
 }
 
 // initializing the model parameters
-func initializeParameters(nn_structure []int) map[string]*mat.Dense {
+func initializeParameters(nnStructure []int) map[string]*mat.Dense {
 	parameters := make(map[string]*mat.Dense) // map containing the parameters
-	L := len(nn_structure) - 1                // number of layers
+	L := len(nnStructure) - 1                 // number of layers
 
 	for l := 0; l < L; l++ {
-		scalar := math.Sqrt((6.0 / float64(nn_structure[l]+nn_structure[l+1])))
+		scalar := math.Sqrt((6.0 / float64(nnStructure[l]+nnStructure[l+1])))
 
-		parameters["W"+strconv.Itoa(l+1)] = ngo.Scale(scalar, ngo.Randn(nn_structure[l+1], nn_structure[l]))
-		parameters["b"+strconv.Itoa(l+1)] = mat.NewDense(nn_structure[l+1], 1, nil)
+		parameters["W"+strconv.Itoa(l+1)] = ngo.Scale(scalar, ngo.Randn(nnStructure[l+1], nnStructure[l]))
+		parameters["b"+strconv.Itoa(l+1)] = mat.NewDense(nnStructure[l+1], 1, nil)
 	}
 
 	return parameters
 }
 
 // forward propagation step
-func forwardPropagation(parameters map[string]*mat.Dense, x *mat.Dense, actFunc activationFunction) (*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense) {
+func forwardPropagation(parameters map[string]*mat.Dense, x *mat.Dense,
+	activation activationFunction, outputActivation outputActivationFunction) (*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense) {
 	L := len(parameters) / 2         // number of layers
 	Z := make(map[string]*mat.Dense) // linear function
 	A := make(map[string]*mat.Dense) // activation function
 	A[strconv.Itoa(0)] = x
 
-	applyActFunction := func(_, _ int, v float64) float64 { return actFunc(v) }
+	applyActivationFunction := func(_, _ int, v float64) float64 { return activation(v) }
 	for l := 0; l < L-1; l++ {
 		W := parameters["W"+strconv.Itoa(l+1)] // weights W
 		b := parameters["b"+strconv.Itoa(l+1)] // biases b
 
 		Z[strconv.Itoa(l+1)] = ngo.AddMatrixVector(ngo.MatMul(W, A[strconv.Itoa(l)]), b) // compute the linear operation
-		A[strconv.Itoa(l+1)] = ngo.Apply(applyActFunction, Z[strconv.Itoa(l+1)])         // compute the non linear operation
+		A[strconv.Itoa(l+1)] = ngo.Apply(applyActivationFunction, Z[strconv.Itoa(l+1)])  // compute the non linear operation
 	}
 	// for output layer
 	Z[strconv.Itoa(L)] = ngo.AddMatrixVector(ngo.MatMul(parameters["W"+strconv.Itoa(L)], A[strconv.Itoa(L-1)]), parameters["b"+strconv.Itoa(L)])
-	A[strconv.Itoa(L)] = Z[strconv.Itoa(L)]
+	A[strconv.Itoa(L)] = outputActivation(Z[strconv.Itoa(L)])
 
 	// prediction
-	y_hat := A[strconv.Itoa(L)]
+	yHat := A[strconv.Itoa(L)]
 
-	return y_hat, Z, A
-}
-
-// computing the cost function
-func costFunction(y_hat, y *mat.Dense, parameters map[string]*mat.Dense, lambd float64) float64 {
-	m := y_hat.RawMatrix().Cols
-	cost := mat.Sum(ngo.Square(ngo.Sub(y_hat, y)))
-
-	// l2 regularization cost
-	L := len(parameters) / 2 // number of layers
-	var sum float64
-	for l := 0; l < L; l++ {
-		sum = sum + mat.Sum(ngo.Square(parameters["W"+strconv.Itoa(l+1)]))
-	}
-	cost = cost + lambd*sum
-
-	return (1.0 / (2.0 * float64(m)) * cost)
+	return yHat, Z, A
 }
 
 // backward propagation step
-func backwardPropagation(parameters, Z, A map[string]*mat.Dense, y *mat.Dense, actPrimeFunc activationFunction, lambd float64) (map[string]*mat.Dense, map[string]*mat.Dense) {
+func backwardPropagation(parameters, Z, A map[string]*mat.Dense, y *mat.Dense, derivative activationFunction, lambd float64) (map[string]*mat.Dense, map[string]*mat.Dense) {
 	m := y.RawMatrix().Cols  // number of training examples
 	L := len(parameters) / 2 // number of layers
 
@@ -133,10 +185,10 @@ func backwardPropagation(parameters, Z, A map[string]*mat.Dense, y *mat.Dense, a
 	dW[strconv.Itoa(L)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(L)], A[strconv.Itoa(L-1)].T()), ngo.Scale(lambd/float64(m), parameters["W"+strconv.Itoa(L)]))
 	db[strconv.Itoa(L)] = ngo.SumRows(dZ[strconv.Itoa(L)])
 
-	applyActPrimeFunction := func(_, _ int, v float64) float64 { return actPrimeFunc(v) }
+	applyActivationFunctionDerivative := func(_, _ int, v float64) float64 { return derivative(v) }
 	for l := L - 1; l > 0; l-- {
 		dA[strconv.Itoa(l)] = ngo.MatMul(parameters["W"+strconv.Itoa(l+1)].T(), dZ[strconv.Itoa(l+1)])
-		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], ngo.Apply(applyActPrimeFunction, Z[strconv.Itoa(l)]))
+		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], ngo.Apply(applyActivationFunctionDerivative, Z[strconv.Itoa(l)]))
 		dW[strconv.Itoa(l)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(l)], A[strconv.Itoa(l-1)].T()), ngo.Scale(lambd/float64(m), parameters["W"+strconv.Itoa(l)]))
 		db[strconv.Itoa(l)] = ngo.SumRows(dZ[strconv.Itoa(l)])
 	}
@@ -145,40 +197,39 @@ func backwardPropagation(parameters, Z, A map[string]*mat.Dense, y *mat.Dense, a
 }
 
 // train model
-func (network *neuralNetwork) Fit(x_train, y_train *mat.Dense, print_cost bool) []float64 {
+func (n *neuralModel) Fit(xTrain, yTrain *mat.Dense, printLoss bool) []float64 {
+	// keep track of the loss
+	losses := []float64{}
 	start := time.Now()
 
-	// keep track of the cost
-	costs := []float64{}
-
 	// loop
-	for i := 1; i <= network.num_iterations; i++ {
+	for i := 1; i <= n.NIterations; i++ {
 		// forward propagation
-		y_hat, Z, A := forwardPropagation(network.parameters, x_train, network.activation.function)
+		yHat, Z, A := forwardPropagation(n.Parameters, xTrain, n.Activation.Function, n.OutputActivation.Function)
 
-		// cost function
-		cost := costFunction(y_hat, y_train, network.parameters, network.l2_regularization)
+		// loss function
+		loss := n.LossFunction(yHat, yTrain, n.Parameters, n.L2Regularization)
 
 		// backward propagation
-		dW, db := backwardPropagation(network.parameters, Z, A, y_train, network.activation.derivative, network.l2_regularization)
+		dW, db := backwardPropagation(n.Parameters, Z, A, yTrain, n.Activation.Derivative, n.L2Regularization)
 
 		// update parameters (optimization algorithm)
-		network.parameters = network.optimizer.optimizerFunction(network.parameters, dW, db, network.learning_rate, float64(i))
+		n.Parameters = n.Optimizer.Function(n.Parameters, dW, db, n.LearningRate, float64(i))
 
-		// print the cost every 1000 iterations
-		if print_cost && i%1000 == 0 || print_cost && i == 1 {
-			fmt.Printf("it %d: | t: %.2fs | cost: %e \n", i, time.Since(start).Seconds(), cost)
-			costs = append(costs, cost)
+		// print the loss every 1000 iterations
+		if printLoss && i%1000 == 0 || printLoss && i == 1 {
+			fmt.Printf("it %d: | t: %.2fs | loss: %e \n", i, time.Since(start).Seconds(), loss)
+			losses = append(losses, loss)
 		}
 	}
 
-	return costs
+	return losses
 }
 
 // predictions
-func (network *neuralNetwork) Predict(x *mat.Dense) *mat.Dense {
+func (n *neuralModel) Predict(x *mat.Dense) *mat.Dense {
 	// forward propagation
-	predictions, _, _ := forwardPropagation(network.parameters, x, network.activation.function)
+	predictions, _, _ := forwardPropagation(n.Parameters, x, n.Activation.Function, n.OutputActivation.Function)
 
 	return predictions
 }
