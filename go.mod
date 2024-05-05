@@ -3,7 +3,7 @@ module deep_learning
 go 1.17
 
 require (
-	github.com/adyllyson-gomes/plot v1.0.1
+	github.com/adynascimento/plot v1.0.3
 	gonum.org/v1/gonum v0.11.0
 )
 

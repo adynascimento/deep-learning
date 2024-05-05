@@ -9,32 +9,31 @@ import (
 )
 
 type optimizerType string
+type optimizerFunction func(map[string]*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense, float64, float64) map[string]*mat.Dense
 
 const (
 	AdamOptimizer            optimizerType = "adam"
 	GradientDescentOptimizer optimizerType = "gradientDescent"
 )
 
-type optimizerFunction func(map[string]*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense, float64, float64) map[string]*mat.Dense
-
-type adam struct {
+type adamParameters struct {
 	v map[string]*mat.Dense
 	s map[string]*mat.Dense
 }
 
 type optimizer struct {
-	name              optimizerType
-	optimizerFunction optimizerFunction
-	adam              adam
+	Name     optimizerType
+	Function optimizerFunction
+	Adam     adamParameters
 }
 
 // update the parameters (gradient descent)
-func (model *optimizer) gradientDescentOptimizer(parameters, dW, db map[string]*mat.Dense, learning_rate, t float64) map[string]*mat.Dense {
+func (model *optimizer) GradientDescentOptimizer(parameters, dW, db map[string]*mat.Dense, learningRate, t float64) map[string]*mat.Dense {
 	L := len(parameters) / 2 // number of layers
 
 	for l := 0; l < L; l++ {
-		parameters["W"+strconv.Itoa(l+1)] = ngo.Sub(parameters["W"+strconv.Itoa(l+1)], ngo.Scale(learning_rate, dW[strconv.Itoa(l+1)]))
-		parameters["b"+strconv.Itoa(l+1)] = ngo.Sub(parameters["b"+strconv.Itoa(l+1)], ngo.Scale(learning_rate, db[strconv.Itoa(l+1)]))
+		parameters["W"+strconv.Itoa(l+1)] = ngo.Sub(parameters["W"+strconv.Itoa(l+1)], ngo.Scale(learningRate, dW[strconv.Itoa(l+1)]))
+		parameters["b"+strconv.Itoa(l+1)] = ngo.Sub(parameters["b"+strconv.Itoa(l+1)], ngo.Scale(learningRate, db[strconv.Itoa(l+1)]))
 	}
 
 	return parameters
@@ -60,10 +59,10 @@ func initializeAdam(parameters map[string]*mat.Dense) (map[string]*mat.Dense, ma
 }
 
 // update the parameters (adam optimizer)
-func (model *optimizer) adamOptimizer(parameters, dW, db map[string]*mat.Dense, learning_rate, t float64) map[string]*mat.Dense {
+func (model *optimizer) AdamOptimizer(parameters, dW, db map[string]*mat.Dense, learningRate, t float64) map[string]*mat.Dense {
 	// default parameters
-	beta_1 := 0.9
-	beta_2 := 0.999
+	beta1 := 0.9
+	beta2 := 0.999
 	epsilon := 1e-08
 
 	vCorr := make(map[string]*mat.Dense) // map containing the parameters
@@ -72,29 +71,28 @@ func (model *optimizer) adamOptimizer(parameters, dW, db map[string]*mat.Dense, 
 	L := len(parameters) / 2 // number of layers
 
 	applySqrt := func(_, _ int, v float64) float64 { return math.Sqrt(v) }
-
 	for l := 0; l < L; l++ {
 		// moving average of the gradients
-		model.adam.v["dW"+strconv.Itoa(l+1)] = ngo.Add(ngo.Scale(beta_1, model.adam.v["dW"+strconv.Itoa(l+1)]), ngo.Scale((1-beta_1), dW[strconv.Itoa(l+1)]))
-		model.adam.v["db"+strconv.Itoa(l+1)] = ngo.Add(ngo.Scale(beta_1, model.adam.v["db"+strconv.Itoa(l+1)]), ngo.Scale((1-beta_1), db[strconv.Itoa(l+1)]))
+		model.Adam.v["dW"+strconv.Itoa(l+1)] = ngo.Add(ngo.Scale(beta1, model.Adam.v["dW"+strconv.Itoa(l+1)]), ngo.Scale((1-beta1), dW[strconv.Itoa(l+1)]))
+		model.Adam.v["db"+strconv.Itoa(l+1)] = ngo.Add(ngo.Scale(beta1, model.Adam.v["db"+strconv.Itoa(l+1)]), ngo.Scale((1-beta1), db[strconv.Itoa(l+1)]))
 
 		// compute bias-corrected first moment estimate
-		vCorr["dW"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0-math.Pow(beta_1, t)), model.adam.v["dW"+strconv.Itoa(l+1)])
-		vCorr["db"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0-math.Pow(beta_1, t)), model.adam.v["db"+strconv.Itoa(l+1)])
+		vCorr["dW"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0-math.Pow(beta1, t)), model.Adam.v["dW"+strconv.Itoa(l+1)])
+		vCorr["db"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0-math.Pow(beta1, t)), model.Adam.v["db"+strconv.Itoa(l+1)])
 
 		// moving average of the squared gradients
-		model.adam.s["dW"+strconv.Itoa(l+1)] = ngo.Add(ngo.Scale(beta_2, model.adam.s["dW"+strconv.Itoa(l+1)]), ngo.Scale((1.0-beta_2), ngo.Square(dW[strconv.Itoa(l+1)])))
-		model.adam.s["db"+strconv.Itoa(l+1)] = ngo.Add(ngo.Scale(beta_2, model.adam.s["db"+strconv.Itoa(l+1)]), ngo.Scale((1.0-beta_2), ngo.Square(db[strconv.Itoa(l+1)])))
+		model.Adam.s["dW"+strconv.Itoa(l+1)] = ngo.Add(ngo.Scale(beta2, model.Adam.s["dW"+strconv.Itoa(l+1)]), ngo.Scale((1.0-beta2), ngo.Square(dW[strconv.Itoa(l+1)])))
+		model.Adam.s["db"+strconv.Itoa(l+1)] = ngo.Add(ngo.Scale(beta2, model.Adam.s["db"+strconv.Itoa(l+1)]), ngo.Scale((1.0-beta2), ngo.Square(db[strconv.Itoa(l+1)])))
 
 		// compute bias-corrected second raw moment estimate
-		sCorr["dW"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0-math.Pow(beta_2, t)), model.adam.s["dW"+strconv.Itoa(l+1)])
-		sCorr["db"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0-math.Pow(beta_2, t)), model.adam.s["db"+strconv.Itoa(l+1)])
+		sCorr["dW"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0-math.Pow(beta2, t)), model.Adam.s["dW"+strconv.Itoa(l+1)])
+		sCorr["db"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0-math.Pow(beta2, t)), model.Adam.s["db"+strconv.Itoa(l+1)])
 
 		sqrtW := ngo.Apply(func(_, _ int, v float64) float64 { return v + epsilon }, ngo.Apply(applySqrt, sCorr["dW"+strconv.Itoa(l+1)]))
 		sqrtb := ngo.Apply(func(_, _ int, v float64) float64 { return v + epsilon }, ngo.Apply(applySqrt, sCorr["db"+strconv.Itoa(l+1)]))
 
-		parameters["W"+strconv.Itoa(l+1)] = ngo.Sub(parameters["W"+strconv.Itoa(l+1)], ngo.Scale(learning_rate, ngo.DivElem(vCorr["dW"+strconv.Itoa(l+1)], sqrtW)))
-		parameters["b"+strconv.Itoa(l+1)] = ngo.Sub(parameters["b"+strconv.Itoa(l+1)], ngo.Scale(learning_rate, ngo.DivElem(vCorr["db"+strconv.Itoa(l+1)], sqrtb)))
+		parameters["W"+strconv.Itoa(l+1)] = ngo.Sub(parameters["W"+strconv.Itoa(l+1)], ngo.Scale(learningRate, ngo.DivElem(vCorr["dW"+strconv.Itoa(l+1)], sqrtW)))
+		parameters["b"+strconv.Itoa(l+1)] = ngo.Sub(parameters["b"+strconv.Itoa(l+1)], ngo.Scale(learningRate, ngo.DivElem(vCorr["db"+strconv.Itoa(l+1)], sqrtb)))
 	}
 
 	return parameters
