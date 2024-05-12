@@ -1,9 +1,10 @@
 package neuralnetwork
 
 import (
-	ngo "deep_learning/numeric"
 	"math"
 	"strconv"
+
+	ngo "github.com/adynascimento/deep-learning/numeric"
 
 	"gonum.org/v1/gonum/mat"
 )
@@ -30,7 +31,7 @@ func meanSquareError(yHat, y *mat.Dense, parameters map[string]*mat.Dense, lambd
 func crossEntropy(y_hat, y *mat.Dense, parameters map[string]*mat.Dense, lambd float64) float64 {
 	m := y_hat.RawMatrix().Cols
 
-	epsilon := 0.0
+	epsilon := 1e-07
 	applyLog := func(_, _ int, v float64) float64 { return math.Log(v + epsilon) }
 	loss := mat.Sum(ngo.Multiply(y, ngo.Apply(applyLog, y_hat)))
 
@@ -49,7 +50,7 @@ func crossEntropy(y_hat, y *mat.Dense, parameters map[string]*mat.Dense, lambd f
 func binaryCrossEntropy(y_hat, y *mat.Dense, parameters map[string]*mat.Dense, lambd float64) float64 {
 	m := y_hat.RawMatrix().Cols
 
-	epsilon := 0.0
+	epsilon := 1e-07
 	applyLog := func(_, _ int, v float64) float64 { return math.Log(v + epsilon) }
 	applyOneMinusLog := func(_, _ int, v float64) float64 { return math.Log(1 - v + epsilon) }
 	applyOneMinus := func(_, _ int, v float64) float64 { return 1 - v }

@@ -6,6 +6,13 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
+type directionType string
+
+const (
+	OverRows    directionType = "rows"
+	OverColumns directionType = "columns"
+)
+
 // generate linearly spaced slice of float64
 func Linspace(start, stop float64, num int) []float64 {
 	var step float64
@@ -18,21 +25,41 @@ func Linspace(start, stop float64, num int) []float64 {
 	for i := 0; i < num; i++ {
 		r[i] = start + float64(i)*step
 	}
+
 	return r
 }
 
-// sum rows of a matrix
-func SumRows(a *mat.Dense) *mat.Dense {
-	row := []float64{}
-	for i := 0; i < a.RawMatrix().Rows; i++ {
-		var sum float64
-		for _, v := range a.RawRowView(i) {
-			sum = sum + v
+// sum over specific direction of a matrix
+func Sum(a *mat.Dense, direction directionType) *mat.Dense {
+	m := new(mat.Dense)
+	vals := []float64{}
+
+	switch direction {
+	case OverRows:
+		for j := 0; j < a.RawMatrix().Cols; j++ {
+			var sum float64
+
+			col := mat.Col(nil, j, a)
+			for _, v := range col {
+				sum = sum + v
+			}
+			vals = append(vals, sum)
 		}
-		row = append(row, sum)
+		m = mat.NewDense(1, a.RawMatrix().Cols, vals)
+	case OverColumns:
+		for i := 0; i < a.RawMatrix().Rows; i++ {
+			var sum float64
+
+			row := mat.Row(nil, i, a)
+			for _, v := range row {
+				sum = sum + v
+			}
+			vals = append(vals, sum)
+		}
+		m = mat.NewDense(a.RawMatrix().Rows, 1, vals)
 	}
 
-	return mat.NewDense(a.RawMatrix().Rows, 1, row)
+	return m
 }
 
 // add matrix with column vector row-wise
@@ -44,10 +71,10 @@ func AddMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
 	return m
 }
 
-// division matrix with column vector row-wise
+// division matrix with row vector column-wise
 func DivMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
 	m := new(mat.Dense)
-	fn := func(row, _ int, v float64) float64 { return v / b.At(row, 0) }
+	fn := func(_, col int, v float64) float64 { return v / b.At(0, col) }
 	m.Apply(fn, a)
 
 	return m

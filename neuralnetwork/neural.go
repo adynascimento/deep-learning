@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	ngo "deep_learning/numeric"
+	ngo "github.com/adynascimento/deep-learning/numeric"
 
 	"gonum.org/v1/gonum/mat"
 )
@@ -17,7 +17,7 @@ type NeuralConfig struct {
 	Mode        modeType
 }
 
-type neuralNetwork struct {
+type NeuralNetwork struct {
 	NNStructure      []int
 	Activation       activation
 	OutputActivation outputActivation
@@ -25,7 +25,7 @@ type neuralNetwork struct {
 	Parameters       map[string]*mat.Dense
 }
 
-func NewNeuralNetwork(config NeuralConfig) neuralNetwork {
+func NewNeuralNetwork(config NeuralConfig) NeuralNetwork {
 	// choice of activation function
 	activationFunction := activation{}
 	switch config.Activation {
@@ -82,7 +82,7 @@ func NewNeuralNetwork(config NeuralConfig) neuralNetwork {
 	// initializing the model parameters
 	parameters := initializeParameters(config.NNStructure)
 
-	return neuralNetwork{
+	return NeuralNetwork{
 		NNStructure:      config.NNStructure,
 		Activation:       activationFunction,
 		OutputActivation: outputActivationFunction,
@@ -98,15 +98,15 @@ type TrainerConfig struct {
 	NIterations      int
 }
 
-type neuralModel struct {
-	neuralNetwork
+type NeuralModel struct {
+	NeuralNetwork
 	Optimizer        optimizer
 	LearningRate     float64
 	L2Regularization float64
 	NIterations      int
 }
 
-func NewTrainer(neural neuralNetwork, config TrainerConfig) neuralModel {
+func NewTrainer(neural NeuralNetwork, config TrainerConfig) NeuralModel {
 	// choice of optimization algorithm
 	optimizer := optimizer{}
 	switch config.Optimizer {
@@ -121,8 +121,8 @@ func NewTrainer(neural neuralNetwork, config TrainerConfig) neuralModel {
 		optimizer.Adam = adamParameters{v: v, s: s}
 	}
 
-	return neuralModel{
-		neuralNetwork:    neural,
+	return NeuralModel{
+		NeuralNetwork:    neural,
 		Optimizer:        optimizer,
 		LearningRate:     config.LearningRate,
 		L2Regularization: config.L2Regularization,
@@ -183,21 +183,21 @@ func backwardPropagation(parameters, Z, A map[string]*mat.Dense, y *mat.Dense, d
 
 	dZ[strconv.Itoa(L)] = ngo.Scale(1./float64(m), ngo.Sub(A[strconv.Itoa(L)], y))
 	dW[strconv.Itoa(L)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(L)], A[strconv.Itoa(L-1)].T()), ngo.Scale(lambd/float64(m), parameters["W"+strconv.Itoa(L)]))
-	db[strconv.Itoa(L)] = ngo.SumRows(dZ[strconv.Itoa(L)])
+	db[strconv.Itoa(L)] = ngo.Sum(dZ[strconv.Itoa(L)], ngo.OverColumns)
 
 	applyActivationFunctionDerivative := func(_, _ int, v float64) float64 { return derivative(v) }
 	for l := L - 1; l > 0; l-- {
 		dA[strconv.Itoa(l)] = ngo.MatMul(parameters["W"+strconv.Itoa(l+1)].T(), dZ[strconv.Itoa(l+1)])
 		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], ngo.Apply(applyActivationFunctionDerivative, Z[strconv.Itoa(l)]))
 		dW[strconv.Itoa(l)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(l)], A[strconv.Itoa(l-1)].T()), ngo.Scale(lambd/float64(m), parameters["W"+strconv.Itoa(l)]))
-		db[strconv.Itoa(l)] = ngo.SumRows(dZ[strconv.Itoa(l)])
+		db[strconv.Itoa(l)] = ngo.Sum(dZ[strconv.Itoa(l)], ngo.OverColumns)
 	}
 
 	return dW, db
 }
 
 // train model
-func (n *neuralModel) Fit(xTrain, yTrain *mat.Dense, printLoss bool) []float64 {
+func (n *NeuralModel) Fit(xTrain, yTrain *mat.Dense, printLoss bool) []float64 {
 	// keep track of the loss
 	losses := []float64{}
 	start := time.Now()
@@ -217,9 +217,9 @@ func (n *neuralModel) Fit(xTrain, yTrain *mat.Dense, printLoss bool) []float64 {
 		n.Parameters = n.Optimizer.Function(n.Parameters, dW, db, n.LearningRate, float64(i))
 
 		// print the loss every 1000 iterations
-		if printLoss && i%1000 == 0 || printLoss && i == 1 {
+		losses = append(losses, loss)
+		if printLoss && i%100 == 0 || printLoss && i == 1 {
 			fmt.Printf("it %d: | t: %.2fs | loss: %e \n", i, time.Since(start).Seconds(), loss)
-			losses = append(losses, loss)
 		}
 	}
 
@@ -227,7 +227,7 @@ func (n *neuralModel) Fit(xTrain, yTrain *mat.Dense, printLoss bool) []float64 {
 }
 
 // predictions
-func (n *neuralModel) Predict(x *mat.Dense) *mat.Dense {
+func (n *NeuralModel) Predict(x *mat.Dense) *mat.Dense {
 	// forward propagation
 	predictions, _, _ := forwardPropagation(n.Parameters, x, n.Activation.Function, n.OutputActivation.Function)
 

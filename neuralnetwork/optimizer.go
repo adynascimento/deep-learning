@@ -1,9 +1,10 @@
 package neuralnetwork
 
 import (
-	ngo "deep_learning/numeric"
 	"math"
 	"strconv"
+
+	ngo "github.com/adynascimento/deep-learning/numeric"
 
 	"gonum.org/v1/gonum/mat"
 )
