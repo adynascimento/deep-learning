@@ -1,6 +1,6 @@
-module deep_learning
+module github.com/adynascimento/deep-learning
 
-go 1.17
+go 1.22
 
 require (
 	github.com/adynascimento/plot v1.0.3

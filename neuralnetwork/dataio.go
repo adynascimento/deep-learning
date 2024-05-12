@@ -21,7 +21,7 @@ type model struct {
 }
 
 // save a representation of v to the file at path.
-func (n *neuralModel) Save(path string) {
+func (n *NeuralModel) Save(path string) {
 	model := toModel(*n)
 
 	b, err := json.MarshalIndent(model, "", "\t")
@@ -35,7 +35,7 @@ func (n *neuralModel) Save(path string) {
 	}
 }
 
-func toModel(network neuralModel) model {
+func toModel(network NeuralModel) model {
 	parameters := make(map[string][]float64)
 	for k, v := range network.Parameters {
 		parameters[k] = v.RawMatrix().Data
@@ -55,7 +55,7 @@ func toModel(network neuralModel) model {
 	return model
 }
 
-func Load(path string) neuralModel {
+func Load(path string) NeuralModel {
 	b, err := os.ReadFile(path)
 	if nil != err {
 		log.Println("error loading neural network model from file: ", err.Error())
@@ -71,7 +71,7 @@ func Load(path string) neuralModel {
 	return network
 }
 
-func toNetwork(model model) neuralModel {
+func toNetwork(model model) NeuralModel {
 	parameters := make(map[string]*mat.Dense) // map containing the parameters
 	L := len(model.NNStructure) - 1           // number of layers
 
@@ -126,8 +126,8 @@ func toNetwork(model model) neuralModel {
 		}
 	}
 
-	network := neuralModel{
-		neuralNetwork: neuralNetwork{
+	network := NeuralModel{
+		NeuralNetwork: NeuralNetwork{
 			Activation:       activationFunction,
 			OutputActivation: outputActivationFunction,
 			Parameters:       parameters,

@@ -1,8 +1,9 @@
 package neuralnetwork
 
 import (
-	ngo "deep_learning/numeric"
 	"math"
+
+	ngo "github.com/adynascimento/deep-learning/numeric"
 
 	"gonum.org/v1/gonum/mat"
 )
@@ -89,7 +90,7 @@ func applyLinear(a *mat.Dense) *mat.Dense {
 func applySoftmax(a *mat.Dense) *mat.Dense {
 	applyExp := func(_, _ int, v float64) float64 { return math.Exp(v) }
 	exp := ngo.Apply(applyExp, a)
-	sum := ngo.SumRows(exp)
+	sum := ngo.Sum(exp, ngo.OverRows)
 
 	return ngo.DivMatrixVector(exp, sum)
 }
