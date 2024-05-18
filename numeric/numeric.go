@@ -13,6 +13,16 @@ const (
 	OverColumns directionType = "columns"
 )
 
+// generate uniform random int (min <= x <= max)
+func RandInt(min int, max int) int {
+	return rand.Intn(max-min) + min
+}
+
+// generate uniform random float (min <= x <= max)
+func RandFloat(min float64, max float64) float64 {
+	return (rand.Float64() * (max - min)) + min
+}
+
 // generate linearly spaced slice of float64
 func Linspace(start, stop float64, num int) []float64 {
 	var step float64
