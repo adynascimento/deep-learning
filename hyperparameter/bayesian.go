@@ -11,14 +11,14 @@ import (
 )
 
 // bayesian optimization
-func (hp *hyperparameter) BayesianOptimization(model NeuralNetworkModel) {
+func (hp *hyperparameter) BayesianOptimization(direction StudyDirection, model NeuralNetworkModel) {
 	hp.NeuralNetworkModel = model
 
 	// create a study which manages each experiment.
 	study, _ := goptuna.CreateStudy(
 		"neuralnetwork",
 		goptuna.StudyOptionSampler(tpe.NewSampler(tpe.SamplerOptionSeed(time.Now().UnixNano()))),
-		goptuna.StudyOptionDirection(goptuna.StudyDirectionMinimize),
+		goptuna.StudyOptionDirection(goptuna.StudyDirection(direction)),
 	)
 
 	// evaluate your objective function.
@@ -51,9 +51,9 @@ func (hp *hyperparameter) objective(trial goptuna.Trial) (float64, error) {
 	l2Regularization, _ := trial.SuggestLogUniform("lambd", hp.LambdRange[0], hp.LambdRange[1])
 
 	// neural network model
-	err := hp.NeuralNetworkModel(trial.ID, nnStructure, l2Regularization)
+	metric := hp.NeuralNetworkModel(trial.ID, nnStructure, l2Regularization)
 
-	return err, nil
+	return metric, nil
 }
 
 // print the best evaluation parameters.

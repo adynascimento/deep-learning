@@ -8,87 +8,25 @@ import (
 
 	ngo "github.com/adynascimento/deep-learning/numeric"
 
+	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"
 )
+
+type NeuralNetwork interface {
+	NewTrainer(config TrainerConfig) NeuralModel
+}
+
+type NeuralModel interface {
+	Fit(xTrain *mat.Dense, yTrain *mat.Dense, printLoss bool) []float64
+	Predict(x *mat.Dense) *mat.Dense
+	Evaluate(x *mat.Dense, y *mat.Dense) float64
+	Save(path string)
+}
 
 type NeuralConfig struct {
 	NNStructure []int
 	Activation  activationType
 	Mode        modeType
-}
-
-type NeuralNetwork struct {
-	NNStructure      []int
-	Activation       activation
-	OutputActivation outputActivation
-	LossFunction     lossFunction
-	Parameters       map[string]*mat.Dense
-}
-
-func NewNeuralNetwork(config NeuralConfig) NeuralNetwork {
-	// choice of activation function
-	activationFunction := activation{}
-	switch config.Activation {
-	case ActivationTanh:
-		activationFunction = activation{
-			Name:       config.Activation,
-			Function:   tanhActivation,
-			Derivative: tanhActivationDerivative,
-		}
-	case ActivationSigmoid:
-		activationFunction = activation{
-			Name:       config.Activation,
-			Function:   sigmoidActivation,
-			Derivative: sigmoidActivationDerivative,
-		}
-	case ActivationElu:
-		activationFunction = activation{
-			Name:       config.Activation,
-			Function:   eluActivation,
-			Derivative: eluActivationDerivative,
-		}
-	}
-
-	// choice of output layer activation function and loss
-	var lossFunction lossFunction
-	outputActivationFunction := outputActivation{}
-	switch config.Mode {
-	case ModeRegression:
-		outputActivationFunction = outputActivation{
-			Mode:     config.Mode,
-			Function: applyLinear,
-		}
-		lossFunction = meanSquareError
-	case ModeMultiClass:
-		outputActivationFunction = outputActivation{
-			Mode:     config.Mode,
-			Function: applySoftmax,
-		}
-		lossFunction = crossEntropy
-	case ModeMultiLabel:
-		outputActivationFunction = outputActivation{
-			Mode:     config.Mode,
-			Function: applySigmoid,
-		}
-		lossFunction = crossEntropy
-	case ModeBinary:
-		outputActivationFunction = outputActivation{
-			Mode:     config.Mode,
-			Function: applySigmoid,
-		}
-		lossFunction = binaryCrossEntropy
-	}
-
-	// initializing the model parameters
-	parameters := initializeParameters(config.NNStructure)
-
-	return NeuralNetwork{
-		NNStructure:      config.NNStructure,
-		Activation:       activationFunction,
-		OutputActivation: outputActivationFunction,
-		LossFunction:     lossFunction,
-		Parameters:       parameters,
-	}
 }
 
 type TrainerConfig struct {
@@ -98,36 +36,128 @@ type TrainerConfig struct {
 	NIterations      int
 }
 
-type NeuralModel struct {
-	NeuralNetwork
+type neuralNetwork struct {
+	NNStructure      []int
+	Activation       activation
+	Mode             modeType
+	OutputActivation outputActivation
+	LossFunction     lossFunction
+	Parameters       map[string]*mat.Dense
+}
+
+type neuralModel struct {
+	*neuralNetwork
 	Optimizer        optimizer
 	LearningRate     float64
 	L2Regularization float64
 	NIterations      int
 }
 
-func NewTrainer(neural NeuralNetwork, config TrainerConfig) NeuralModel {
-	// choice of optimization algorithm
-	optimizer := optimizer{}
-	switch config.Optimizer {
-	case GradientDescentOptimizer:
-		optimizer.Name = config.Optimizer
-		optimizer.Function = optimizer.GradientDescentOptimizer
-	case AdamOptimizer:
-		optimizer.Name = config.Optimizer
-		optimizer.Function = optimizer.AdamOptimizer
+func NewNeuralNetwork(config NeuralConfig) NeuralNetwork {
+	// choice of activation function
+	activationFunction := activationSettings[config.Activation]
 
-		v, s := initializeAdam(neural.Parameters)
-		optimizer.Adam = adamParameters{v: v, s: s}
+	// choice of output layer activation function and loss function
+	lossFunction := modeSettings[config.Mode].lossFunction
+	outputActivationFunction := modeSettings[config.Mode].outputActivation
+
+	// initializing the model parameters
+	parameters := initializeParameters(config.NNStructure)
+
+	return &neuralNetwork{
+		NNStructure:      config.NNStructure,
+		Activation:       activationFunction,
+		Mode:             config.Mode,
+		OutputActivation: outputActivationFunction,
+		LossFunction:     lossFunction,
+		Parameters:       parameters,
+	}
+}
+
+func (nn *neuralNetwork) NewTrainer(config TrainerConfig) NeuralModel {
+	// choice of optimization algorithm
+	optimizer := optimizerSettings[config.Optimizer]
+	if config.Optimizer == AdamOptimizer {
+		optimizer.Adam = initializeAdam(nn.Parameters)
 	}
 
-	return NeuralModel{
-		NeuralNetwork:    neural,
+	return &neuralModel{
+		neuralNetwork:    nn,
 		Optimizer:        optimizer,
 		LearningRate:     config.LearningRate,
 		L2Regularization: config.L2Regularization,
 		NIterations:      config.NIterations,
 	}
+}
+
+// train model
+func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, printLoss bool) []float64 {
+	// keep track of the loss
+	start := time.Now()
+	losses := []float64{}
+
+	// loop
+	for i := 1; i <= nm.NIterations; i++ {
+		// forward propagation
+		yHat, Z, A := forwardPropagation(nm.Parameters, xTrain, nm.Activation.Function,
+			nm.OutputActivation.Function)
+
+		// loss function
+		loss := nm.LossFunction(yHat, yTrain, nm.Parameters, nm.L2Regularization)
+
+		// backward propagation
+		dW, db := backwardPropagation(nm.Parameters, Z, A, yTrain, nm.Activation.Derivative, nm.L2Regularization)
+
+		// update parameters (optimization algorithm)
+		nm.Parameters = nm.Optimizer.Function(&nm.Optimizer, nm.Parameters, dW, db,
+			nm.LearningRate, float64(i))
+
+		// print the loss every x iterations
+		losses = append(losses, loss)
+		if printLoss && i%(nm.NIterations/10) == 0 || printLoss && i == 1 {
+			if nm.Mode == ModeRegression {
+				fmt.Printf("iter %6d/%d: | t: %5.2fs | loss: %.6e \n", i, nm.NIterations, time.Since(start).Seconds(), loss)
+			} else {
+				fmt.Printf("iter %6d/%d: | t: %5.2fs | loss: %.6e | acc: %.4f \n", i, nm.NIterations,
+					time.Since(start).Seconds(), loss, nm.Evaluate(xTrain, yTrain))
+			}
+		}
+	}
+
+	return losses
+}
+
+// predictions with forward propagation
+func (nm *neuralModel) Predict(x *mat.Dense) *mat.Dense {
+	predictions, _, _ := forwardPropagation(nm.Parameters, x, nm.Activation.Function,
+		nm.OutputActivation.Function)
+
+	return predictions
+}
+
+// evaluate model
+func (nm *neuralModel) Evaluate(x, y *mat.Dense) float64 {
+	yPred := nm.Predict(x)
+
+	metric := 0.0
+	switch nm.Mode {
+	case ModeRegression:
+		// mean squared error
+		metric = mat.Sum(ngo.Square(ngo.Sub(y, yPred))) / float64(y.RawMatrix().Cols)
+	case ModeMultiClass:
+		// accuracy
+		for j := 0; j < y.RawMatrix().Cols; j++ {
+			trueClass := floats.MaxIdx(mat.Col(nil, j, y))
+			predClass := floats.MaxIdx(mat.Col(nil, j, yPred))
+
+			if trueClass == predClass {
+				metric++
+			}
+		}
+		metric = (metric / float64(y.RawMatrix().Cols))
+	}
+
+	return metric
 }
 
 // initializing the model parameters
@@ -194,42 +224,4 @@ func backwardPropagation(parameters, Z, A map[string]*mat.Dense, y *mat.Dense, d
 	}
 
 	return dW, db
-}
-
-// train model
-func (n *NeuralModel) Fit(xTrain, yTrain *mat.Dense, printLoss bool) []float64 {
-	// keep track of the loss
-	losses := []float64{}
-	start := time.Now()
-
-	// loop
-	for i := 1; i <= n.NIterations; i++ {
-		// forward propagation
-		yHat, Z, A := forwardPropagation(n.Parameters, xTrain, n.Activation.Function, n.OutputActivation.Function)
-
-		// loss function
-		loss := n.LossFunction(yHat, yTrain, n.Parameters, n.L2Regularization)
-
-		// backward propagation
-		dW, db := backwardPropagation(n.Parameters, Z, A, yTrain, n.Activation.Derivative, n.L2Regularization)
-
-		// update parameters (optimization algorithm)
-		n.Parameters = n.Optimizer.Function(n.Parameters, dW, db, n.LearningRate, float64(i))
-
-		// print the loss every 1000 iterations
-		losses = append(losses, loss)
-		if printLoss && i%100 == 0 || printLoss && i == 1 {
-			fmt.Printf("it %d: | t: %.2fs | loss: %e \n", i, time.Since(start).Seconds(), loss)
-		}
-	}
-
-	return losses
-}
-
-// predictions
-func (n *NeuralModel) Predict(x *mat.Dense) *mat.Dense {
-	// forward propagation
-	predictions, _, _ := forwardPropagation(n.Parameters, x, n.Activation.Function, n.OutputActivation.Function)
-
-	return predictions
 }

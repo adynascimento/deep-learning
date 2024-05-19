@@ -8,6 +8,60 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
+var activationSettings = map[activationType]activation{
+	TanhActivation: {
+		Name:       TanhActivation,
+		Function:   tanhActivation,
+		Derivative: tanhActivationDerivative,
+	},
+	SigmoidActivation: {
+		Name:       SigmoidActivation,
+		Function:   sigmoidActivation,
+		Derivative: sigmoidActivationDerivative,
+	},
+	EluActivation: {
+		Name:       EluActivation,
+		Function:   eluActivation,
+		Derivative: eluActivationDerivative,
+	},
+}
+
+type configMode struct {
+	outputActivation outputActivation
+	lossFunction     lossFunction
+}
+
+var modeSettings = map[modeType]configMode{
+	ModeRegression: {
+		outputActivation: outputActivation{
+			Mode:     ModeRegression,
+			Function: applyLinear,
+		},
+		lossFunction: meanSquaredError,
+	},
+	ModeMultiClass: {
+		outputActivation: outputActivation{
+			Mode:     ModeMultiClass,
+			Function: applySoftmax,
+		},
+		lossFunction: crossEntropy,
+	},
+	ModeMultiLabel: {
+		outputActivation: outputActivation{
+			Mode:     ModeMultiLabel,
+			Function: applySigmoid,
+		},
+		lossFunction: binaryCrossEntropy,
+	},
+	ModeBinary: {
+		outputActivation: outputActivation{
+			Mode:     ModeBinary,
+			Function: applySigmoid,
+		},
+		lossFunction: binaryCrossEntropy,
+	},
+}
+
 type activationType string
 type activationFunction func(float64) float64
 
@@ -15,14 +69,14 @@ type modeType string
 type outputActivationFunction func(*mat.Dense) *mat.Dense
 
 const (
-	ActivationTanh    activationType = "tanh"
-	ActivationSigmoid activationType = "sigmoid"
-	ActivationElu     activationType = "elu"
+	TanhActivation    activationType = "tanh"
+	SigmoidActivation activationType = "sigmoid"
+	EluActivation     activationType = "elu"
 
 	ModeRegression modeType = "regression"  // linear output with mse loss
 	ModeMultiClass modeType = "multiclass"  // softmax output with cross entropy loss
-	ModeMultiLabel modeType = "multilabel"  // sigmoid output with cross entropy loss
-	ModeBinary     modeType = "binaryclass" // sigmoid output with binary ce loss
+	ModeMultiLabel modeType = "multilabel"  // sigmoid output with binary cross entropy loss
+	ModeBinary     modeType = "binaryclass" // sigmoid output with binary cross entropy loss
 )
 
 type activation struct {

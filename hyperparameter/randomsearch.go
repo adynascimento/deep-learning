@@ -9,13 +9,13 @@ import (
 	ngo "github.com/adynascimento/deep-learning/numeric"
 )
 
-func (hp *hyperparameter) RandomSearchOptimization(model NeuralNetworkModel) {
+func (hp *hyperparameter) RandomSearchOptimization(direction StudyDirection, model NeuralNetworkModel) {
 	hp.NeuralNetworkModel = model
 
 	// lists
+	metricList := []float64{}
 	nnStructureList := [][]int{}
 	l2RegularizationList := []float64{}
-	errorList := []float64{}
 
 	// random search optimization
 	for i := 0; i < hp.NModels; i++ {
@@ -35,17 +35,22 @@ func (hp *hyperparameter) RandomSearchOptimization(model NeuralNetworkModel) {
 		l2RegularizationList = append(l2RegularizationList, l2Regularization)
 
 		// neural network model
-		err := hp.NeuralNetworkModel(i, nnStructure, l2Regularization)
-		errorList = append(errorList, err)
+		metric := hp.NeuralNetworkModel(i, nnStructure, l2Regularization)
+		metricList = append(metricList, metric)
 
 		fmt.Printf("%s \033[1m\033[38;5;27m[INFO]\033[0m Trial finished: trialID=%d, state=%s, evaluation=%f \n",
-			time.Now().Format("2006-01-02 15:04:05"), i, "Complete", err)
+			time.Now().Format("2006-01-02 15:04:05"), i, "Complete", metric)
 	}
 
-	min_index := floats.MinIdx(errorList)
-	fmt.Println("number of finished trials:", len(errorList))
-	fmt.Println("best trial:", errorList[min_index])
+	index := 0
+	if direction == Minimize {
+		index = floats.MinIdx(metricList)
+	} else {
+		index = floats.MaxIdx(metricList)
+	}
+	fmt.Println("number of finished trials:", len(metricList))
+	fmt.Println("best trial:", metricList[index])
 	fmt.Println("params:")
-	fmt.Println("architecture:", nnStructureList[min_index])
-	fmt.Printf("lambd: %e \n", l2RegularizationList[min_index])
+	fmt.Println("architecture:", nnStructureList[index])
+	fmt.Printf("lambd: %e \n", l2RegularizationList[index])
 }

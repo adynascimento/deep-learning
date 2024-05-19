@@ -1,10 +1,16 @@
 package hyperparameter
 
+type StudyDirection string
 type NeuralNetworkModel func(int, []int, float64) float64
 
+const (
+	Maximize StudyDirection = "maximize" // maximizes objective function value
+	Minimize StudyDirection = "minimize" // minimizes objective function value
+)
+
 type Hyperparameter interface {
-	RandomSearchOptimization(model NeuralNetworkModel)
-	BayesianOptimization(model NeuralNetworkModel)
+	RandomSearchOptimization(direction StudyDirection, model NeuralNetworkModel)
+	BayesianOptimization(direction StudyDirection, model NeuralNetworkModel)
 }
 
 type Params struct {
