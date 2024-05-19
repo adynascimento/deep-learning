@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/adynascimento/deep-learning/dataset"
-	hyperopt "github.com/adynascimento/deep-learning/hyperparameter"
+	"github.com/adynascimento/deep-learning/hyperopt"
 	network "github.com/adynascimento/deep-learning/neuralnetwork"
 )
 

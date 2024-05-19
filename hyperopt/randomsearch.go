@@ -1,4 +1,4 @@
-package hyperparameter
+package hyperopt
 
 import (
 	"fmt"
@@ -48,8 +48,7 @@ func (hp *hyperparameter) RandomSearchOptimization(direction StudyDirection, mod
 	} else {
 		index = floats.MaxIdx(metricList)
 	}
-	fmt.Println("number of finished trials:", len(metricList))
-	fmt.Println("best trial:", metricList[index])
+	fmt.Printf("best trialID=%d with evaluation=%f \n", index, metricList[index])
 	fmt.Println("params:")
 	fmt.Println("architecture:", nnStructureList[index])
 	fmt.Printf("lambd: %e \n", l2RegularizationList[index])

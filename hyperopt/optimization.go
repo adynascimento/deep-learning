@@ -1,4 +1,4 @@
-package hyperparameter
+package hyperopt
 
 type StudyDirection string
 type NeuralNetworkModel func(int, []int, float64) float64

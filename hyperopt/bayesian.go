@@ -1,4 +1,4 @@
-package hyperparameter
+package hyperopt
 
 import (
 	"fmt"
@@ -21,15 +21,12 @@ func (hp *hyperparameter) BayesianOptimization(direction StudyDirection, model N
 		goptuna.StudyOptionDirection(goptuna.StudyDirection(direction)),
 	)
 
-	// evaluate your objective function.
+	// evaluate objective function.
 	study.Optimize(hp.objective, hp.NModels)
 
 	// print the best evaluation parameters.
-	trials, _ := study.GetTrials()
-	fmt.Println("number of finished trials:", len(trials))
-
-	trial, _ := study.GetBestValue()
-	fmt.Println("best trial:", trial)
+	trial, _ := study.Storage.GetBestTrial(study.ID)
+	fmt.Printf("best trialID=%d with evaluation=%f \n", trial.ID, trial.Value)
 
 	params, _ := study.GetBestParams()
 	printParams(hp.InputDim, hp.OutputDim, params)
