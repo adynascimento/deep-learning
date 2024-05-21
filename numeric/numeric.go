@@ -1,6 +1,7 @@
 package numeric
 
 import (
+	"math"
 	"math/rand"
 
 	"gonum.org/v1/gonum/mat"
@@ -13,14 +14,23 @@ const (
 	OverColumns directionType = "columns"
 )
 
-// generate uniform random int (min <= x <= max)
-func RandInt(min int, max int) int {
+// generate uniform random int [min, max]
+func SuggestInt(min, max int) int {
 	return rand.Intn(max-min) + min
 }
 
-// generate uniform random float (min <= x <= max)
-func RandFloat(min float64, max float64) float64 {
+// generate uniform random float [min, max]
+func SuggestFloat(min, max float64) float64 {
 	return (rand.Float64() * (max - min)) + min
+}
+
+// generate log uniform random float [min, max]
+func SuggestLogFloat(min, max float64) float64 {
+	logMin := math.Log(min)
+	logMax := math.Log(max)
+	logUniform := rand.Float64()*(logMax-logMin) + logMin
+
+	return math.Exp(logUniform)
 }
 
 // generate linearly spaced slice of float64

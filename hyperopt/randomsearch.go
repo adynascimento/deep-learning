@@ -20,18 +20,18 @@ func (hp *hyperparameter) RandomSearchOptimization(direction StudyDirection, mod
 	// random search optimization
 	for i := 0; i < hp.NModels; i++ {
 		// define the search space
-		layersDims := ngo.RandInt(hp.NLayersRange[0], hp.NLayersRange[1])
+		layersDims := ngo.SuggestInt(hp.NLayersRange[0], hp.NLayersRange[1])
 
 		nnStructure := make([]int, layersDims)   // dnn architecture
 		nnStructure[0] = hp.InputDim             // input layer size
 		nnStructure[layersDims-1] = hp.OutputDim // output layer size
 		for j := 1; j < layersDims-1; j++ {
-			nnStructure[j] = ngo.RandInt(hp.NHiddenRange[0], hp.NHiddenRange[1]) // hidden layers
+			nnStructure[j] = ngo.SuggestInt(hp.NHiddenRange[0], hp.NHiddenRange[1]) // hidden layers
 		}
 		nnStructureList = append(nnStructureList, nnStructure)
 
 		// define the search space
-		l2Regularization := ngo.RandFloat(hp.LambdRange[0], hp.LambdRange[1]) // regularization parameter
+		l2Regularization := ngo.SuggestLogFloat(hp.LambdRange[0], hp.LambdRange[1]) // regularization parameter
 		l2RegularizationList = append(l2RegularizationList, l2Regularization)
 
 		// neural network model
