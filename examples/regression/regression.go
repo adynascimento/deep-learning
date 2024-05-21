@@ -4,7 +4,7 @@ import (
 	"math"
 
 	network "github.com/adynascimento/deep-learning/neuralnetwork"
-	ngo "github.com/adynascimento/deep-learning/numeric"
+	ngo "github.com/adynascimento/deep-learning/gonum"
 
 	"github.com/adynascimento/plot/plot"
 	"gonum.org/v1/gonum/mat"

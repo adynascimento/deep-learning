@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	ngo "github.com/adynascimento/deep-learning/numeric"
+	ngo "github.com/adynascimento/deep-learning/gonum"
 
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"
