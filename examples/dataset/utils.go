@@ -19,13 +19,13 @@ import (
 func LoadFromFile(path string) *mat.Dense {
 	file, err := os.Open(path)
 	if err != nil {
-		log.Println("error loading features from file: ", err.Error())
+		log.Println("error loading features from file:", err.Error())
 	}
 	defer file.Close()
 
 	lines, err := csv.NewReader(file).ReadAll()
 	if err != nil {
-		log.Println("error reading features from file: ", err.Error())
+		log.Println("error reading features from file:", err.Error())
 	}
 
 	m := mat.NewDense(len(lines[0]), len(lines), nil)
@@ -55,13 +55,13 @@ func PredictFromImage(model network.NeuralModel, path string) (int, float64) {
 func loadFromImage(path string) *mat.Dense {
 	file, err := os.Open(path)
 	if err != nil {
-		log.Println("error loading image from file: ", err.Error())
+		log.Println("error loading image from file:", err.Error())
 	}
 	defer file.Close()
 
 	img, _, err := image.Decode(file)
 	if err != nil {
-		log.Println("error decoding image: ", err.Error())
+		log.Println("error decoding image:", err.Error())
 	}
 
 	grayImg := image.NewGray(img.Bounds())

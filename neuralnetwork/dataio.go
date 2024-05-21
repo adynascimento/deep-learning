@@ -82,12 +82,16 @@ func toNetwork(model model) NeuralModel {
 	activationFunction := activationSettings[model.ActivationName]
 
 	// choice of output layer activation function and loss function
+	lossFunction := modeSettings[model.Mode].lossFunction
 	outputActivationFunction := modeSettings[model.Mode].outputActivation
 
 	return &neuralModel{
 		neuralNetwork: &neuralNetwork{
+			NNStructure:      model.NNStructure,
 			Activation:       activationFunction,
+			Mode:             model.Mode,
 			OutputActivation: outputActivationFunction,
+			LossFunction:     lossFunction,
 			Parameters:       parameters,
 		},
 	}

@@ -15,6 +15,7 @@ func (hp *hyperparameter) RandomSearchOptimization(direction StudyDirection, mod
 	// lists
 	metricList := []float64{}
 	nnStructureList := [][]int{}
+	learningRateList := []float64{}
 	l2RegularizationList := []float64{}
 
 	// random search optimization
@@ -28,28 +29,37 @@ func (hp *hyperparameter) RandomSearchOptimization(direction StudyDirection, mod
 		for j := 1; j < layersDims-1; j++ {
 			nnStructure[j] = ngo.SuggestInt(hp.NHiddenRange[0], hp.NHiddenRange[1]) // hidden layers
 		}
-		nnStructureList = append(nnStructureList, nnStructure)
 
-		// define the search space
-		l2Regularization := ngo.SuggestLogFloat(hp.LambdRange[0], hp.LambdRange[1]) // regularization parameter
-		l2RegularizationList = append(l2RegularizationList, l2Regularization)
+		learningRate := ngo.SuggestLogFloat(hp.LearningRateRange[0], hp.LearningRateRange[1])
+		l2Regularization := ngo.SuggestLogFloat(hp.LambdRange[0], hp.LambdRange[1])
 
 		// neural network model
-		metric := hp.NeuralNetworkModel(i, nnStructure, l2Regularization)
+		metric := hp.NeuralNetworkModel(i, Params{
+			NNStructure:      nnStructure,
+			LearningRate:     learningRate,
+			L2Regularization: l2Regularization,
+		})
+
+		// trials
 		metricList = append(metricList, metric)
+		nnStructureList = append(nnStructureList, nnStructure)
+		learningRateList = append(learningRateList, learningRate)
+		l2RegularizationList = append(l2RegularizationList, l2Regularization)
 
 		fmt.Printf("%s \033[1m\033[38;5;27m[INFO]\033[0m Trial finished: trialID=%d, state=%s, evaluation=%f \n",
 			time.Now().Format("2006-01-02 15:04:05"), i, "Complete", metric)
 	}
 
-	index := 0
+	idx := 0
 	if direction == Minimize {
-		index = floats.MinIdx(metricList)
-	} else {
-		index = floats.MaxIdx(metricList)
+		idx = floats.MinIdx(metricList)
+	} else if direction == Maximize {
+		idx = floats.MaxIdx(metricList)
 	}
-	fmt.Printf("best trialID=%d with evaluation=%f \n", index, metricList[index])
-	fmt.Println("params:")
-	fmt.Println("architecture:", nnStructureList[index])
-	fmt.Printf("lambd: %e \n", l2RegularizationList[index])
+	fmt.Printf("best trialID=%d with evaluation=%f \n", idx, metricList[idx])
+
+	// best params
+	hp.BestParams["NNStructure"] = nnStructureList[idx]
+	hp.BestParams["LearningRate"] = learningRateList[idx]
+	hp.BestParams["L2Regularization"] = l2RegularizationList[idx]
 }

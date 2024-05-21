@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/c-bata/goptuna"
@@ -28,8 +29,25 @@ func (hp *hyperparameter) BayesianOptimization(direction StudyDirection, model N
 	trial, _ := study.Storage.GetBestTrial(study.ID)
 	fmt.Printf("best trialID=%d with evaluation=%f \n", trial.ID, trial.Value)
 
-	params, _ := study.GetBestParams()
-	printParams(hp.InputDim, hp.OutputDim, params)
+	// best evaluation parameters
+	keys := []string{}
+	for k := range trial.Params {
+		if strings.Contains(k, "hidden") {
+			keys = append(keys, k)
+		}
+	}
+
+	sort.Strings(keys)
+	nnStructure := make([]interface{}, len(keys)+2)
+	nnStructure[0] = hp.InputDim
+	nnStructure[len(nnStructure)-1] = hp.OutputDim
+	for k, v := range keys {
+		nnStructure[k+1] = trial.Params[v]
+	}
+
+	hp.BestParams["NNStructure"] = nnStructure
+	hp.BestParams["LearningRate"] = trial.Params["lr"]
+	hp.BestParams["L2Regularization"] = trial.Params["lambd"]
 }
 
 // objective function which returns a value you want to minimize.
@@ -44,33 +62,15 @@ func (hp *hyperparameter) objective(trial goptuna.Trial) (float64, error) {
 		nnStructure[j], _ = trial.SuggestInt("hidden"+strconv.Itoa(j), hp.NHiddenRange[0], hp.NHiddenRange[1]) // hidden layers
 	}
 
-	// define the search space via Suggest APIs
+	learningRate, _ := trial.SuggestLogUniform("lr", hp.LearningRateRange[0], hp.LearningRateRange[1])
 	l2Regularization, _ := trial.SuggestLogUniform("lambd", hp.LambdRange[0], hp.LambdRange[1])
 
 	// neural network model
-	metric := hp.NeuralNetworkModel(trial.ID, nnStructure, l2Regularization)
+	metric := hp.NeuralNetworkModel(trial.ID, Params{
+		NNStructure:      nnStructure,
+		LearningRate:     learningRate,
+		L2Regularization: l2Regularization,
+	})
 
 	return metric, nil
-}
-
-// print the best evaluation parameters.
-func printParams(inputDim, outputDim int, params map[string]interface{}) {
-	keys := []string{}
-	for k := range params {
-		if k != "lambd" && k != "nlayers" {
-			keys = append(keys, k)
-		}
-	}
-
-	sort.Strings(keys)
-	nnStructure := make([]interface{}, len(keys)+2)
-	nnStructure[0] = inputDim
-	nnStructure[len(nnStructure)-1] = outputDim
-	for k, v := range keys {
-		nnStructure[k+1] = params[v]
-	}
-
-	fmt.Println("params:")
-	fmt.Println("architecture:", nnStructure)
-	fmt.Printf("lambd: %e \n", params["lambd"])
 }
