@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/adynascimento/deep-learning/dataset"
+	"github.com/adynascimento/deep-learning/examples/dataset"
 	network "github.com/adynascimento/deep-learning/neuralnetwork"
 )
 

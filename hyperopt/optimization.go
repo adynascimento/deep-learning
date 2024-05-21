@@ -1,7 +1,7 @@
 package hyperopt
 
 type StudyDirection string
-type NeuralNetworkModel func(int, []int, float64) float64
+type NeuralNetworkModel func(int, Params) float64
 
 const (
 	Maximize StudyDirection = "maximize" // maximizes objective function value
@@ -9,26 +9,40 @@ const (
 )
 
 type Hyperparameter interface {
+	GetBestParams() map[string]interface{}
 	RandomSearchOptimization(direction StudyDirection, model NeuralNetworkModel)
 	BayesianOptimization(direction StudyDirection, model NeuralNetworkModel)
 }
 
 type Params struct {
-	InputDim     int
-	OutputDim    int
-	NLayersRange []int
-	NHiddenRange []int
-	LambdRange   []float64
-	NModels      int
+	NNStructure      []int
+	LearningRate     float64
+	L2Regularization float64
+}
+
+type SearchSpace struct {
+	InputDim          int
+	OutputDim         int
+	NLayersRange      []int
+	NHiddenRange      []int
+	LearningRateRange []float64
+	LambdRange        []float64
+	NModels           int
 }
 
 type hyperparameter struct {
-	Params
+	BestParams map[string]interface{}
+	SearchSpace
 	NeuralNetworkModel
 }
 
-func NewHyperparameterOptimization(params Params) Hyperparameter {
+func NewHyperparameterOptimization(space SearchSpace) Hyperparameter {
 	return &hyperparameter{
-		Params: params,
+		BestParams:  make(map[string]interface{}),
+		SearchSpace: space,
 	}
+}
+
+func (hp *hyperparameter) GetBestParams() map[string]interface{} {
+	return hp.BestParams
 }
