@@ -4,7 +4,7 @@ import (
 	"math"
 
 	network "github.com/adynascimento/deep-learning/neuralnetwork"
-	ngo "github.com/adynascimento/deep-learning/numeric"
+	ngo "github.com/adynascimento/deep-learning/gonum"
 
 	"github.com/adynascimento/plot/plot"
 	"gonum.org/v1/gonum/mat"
@@ -23,12 +23,12 @@ func main() {
 	// neural network model
 	neural := network.NewNeuralNetwork(network.NeuralConfig{
 		NNStructure: []int{inputDim, 40, 20, 10, outputDim}, // neural network structure
-		Activation:  network.ActivationTanh,                 // activation function
+		Activation:  network.TanhActivation,                 // activation function
 		Mode:        network.ModeRegression,                 // mode determines output layer activation and loss function
 	})
 
 	// optimizer to train the model
-	model := network.NewTrainer(neural, network.TrainerConfig{
+	model := neural.NewTrainer(network.TrainerConfig{
 		Optimizer:        network.AdamOptimizer, // optimizer
 		LearningRate:     0.001,                 // learning rate
 		L2Regularization: 1.40e-06,              // l2 regularization
@@ -37,17 +37,17 @@ func main() {
 	model.Fit(xTrain, yTrain, true)
 
 	// saves neural network model to file
-	model.Save("model.json")
+	model.Save("networkmodel.json")
 
 	// make predictions
-	predictions := model.Predict(xTrain)
+	yPred := model.Predict(xTrain)
 
 	// plotting
 	plt := plot.NewPlot()
 	plt.FigSize(12, 9)
 
 	plt.Plot(xTrain.RawMatrix().Data, yTrain.RawMatrix().Data)
-	plt.Plot(xTrain.RawMatrix().Data, predictions.RawMatrix().Data)
+	plt.Plot(xTrain.RawMatrix().Data, yPred.RawMatrix().Data)
 	plt.Title("neural network predictions")
 	plt.XLabel("x values")
 	plt.YLabel("y values")

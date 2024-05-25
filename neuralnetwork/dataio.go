@@ -21,8 +21,8 @@ type model struct {
 }
 
 // save a representation of v to the file at path.
-func (n *NeuralModel) Save(path string) {
-	model := toModel(*n)
+func (nm *neuralModel) Save(path string) {
+	model := toModel(*nm)
 
 	b, err := json.MarshalIndent(model, "", "\t")
 	if err != nil {
@@ -35,13 +35,13 @@ func (n *NeuralModel) Save(path string) {
 	}
 }
 
-func toModel(network NeuralModel) model {
+func toModel(network neuralModel) model {
 	parameters := make(map[string][]float64)
 	for k, v := range network.Parameters {
 		parameters[k] = v.RawMatrix().Data
 	}
 
-	model := model{
+	return model{
 		NNStructure:      network.NNStructure,
 		ActivationName:   network.Activation.Name,
 		Mode:             network.OutputActivation.Mode,
@@ -51,8 +51,6 @@ func toModel(network NeuralModel) model {
 		NIterations:      network.NIterations,
 		Parameters:       parameters,
 	}
-
-	return model
 }
 
 func Load(path string) NeuralModel {
@@ -67,72 +65,30 @@ func Load(path string) NeuralModel {
 		log.Println("error loading neural network model from file: ", err.Error())
 	}
 
-	network := toNetwork(model)
-	return network
+	return toNetwork(model)
 }
 
 func toNetwork(model model) NeuralModel {
 	parameters := make(map[string]*mat.Dense) // map containing the parameters
 	L := len(model.NNStructure) - 1           // number of layers
 
+	// load parameters
 	for l := 0; l < L; l++ {
 		parameters["W"+strconv.Itoa(l+1)] = mat.NewDense(model.NNStructure[l+1], model.NNStructure[l], model.Parameters["W"+strconv.Itoa(l+1)])
 		parameters["b"+strconv.Itoa(l+1)] = mat.NewDense(model.NNStructure[l+1], 1, model.Parameters["b"+strconv.Itoa(l+1)])
 	}
 
-	activationFunction := activation{}
-	switch model.ActivationName {
-	case ActivationTanh:
-		activationFunction = activation{
-			Name:       model.ActivationName,
-			Function:   tanhActivation,
-			Derivative: tanhActivationDerivative,
-		}
-	case ActivationSigmoid:
-		activationFunction = activation{
-			Name:       model.ActivationName,
-			Function:   sigmoidActivation,
-			Derivative: sigmoidActivationDerivative,
-		}
-	case ActivationElu:
-		activationFunction = activation{
-			Name:       model.ActivationName,
-			Function:   eluActivation,
-			Derivative: eluActivationDerivative,
-		}
-	}
+	// choice of activation function
+	activationFunction := activationSettings[model.ActivationName]
 
-	outputActivationFunction := outputActivation{}
-	switch model.Mode {
-	case ModeRegression:
-		outputActivationFunction = outputActivation{
-			Mode:     model.Mode,
-			Function: applyLinear,
-		}
-	case ModeMultiClass:
-		outputActivationFunction = outputActivation{
-			Mode:     model.Mode,
-			Function: applySoftmax,
-		}
-	case ModeMultiLabel:
-		outputActivationFunction = outputActivation{
-			Mode:     model.Mode,
-			Function: applySigmoid,
-		}
-	case ModeBinary:
-		outputActivationFunction = outputActivation{
-			Mode:     model.Mode,
-			Function: applySigmoid,
-		}
-	}
+	// choice of output layer activation function and loss function
+	outputActivationFunction := modeSettings[model.Mode].outputActivation
 
-	network := NeuralModel{
-		NeuralNetwork: NeuralNetwork{
+	return &neuralModel{
+		neuralNetwork: &neuralNetwork{
 			Activation:       activationFunction,
 			OutputActivation: outputActivationFunction,
 			Parameters:       parameters,
 		},
 	}
-
-	return network
 }

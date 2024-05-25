@@ -4,7 +4,7 @@ import (
 	"math"
 	"strconv"
 
-	ngo "github.com/adynascimento/deep-learning/numeric"
+	ngo "github.com/adynascimento/deep-learning/gonum"
 
 	"gonum.org/v1/gonum/mat"
 )
@@ -12,7 +12,7 @@ import (
 type lossFunction func(*mat.Dense, *mat.Dense, map[string]*mat.Dense, float64) float64
 
 // computing the mean squared error loss function
-func meanSquareError(yHat, y *mat.Dense, parameters map[string]*mat.Dense, lambd float64) float64 {
+func meanSquaredError(yHat, y *mat.Dense, parameters map[string]*mat.Dense, lambd float64) float64 {
 	m := yHat.RawMatrix().Cols
 	loss := mat.Sum(ngo.Square(ngo.Sub(yHat, y)))
 
