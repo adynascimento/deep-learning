@@ -13,6 +13,17 @@ const (
 	OverColumns directionType = "columns"
 )
 
+// split dataset into two matrix (training and testing)
+func Split(a *mat.Dense, frac float64) (*mat.Dense, *mat.Dense) {
+	nRows, nCols := a.Dims()
+
+	jdx := int(frac * float64(nCols))
+	m1 := a.Slice(0, nRows, 0, jdx)
+	m2 := a.Slice(0, nRows, jdx, nCols)
+
+	return m1.(*mat.Dense), m2.(*mat.Dense)
+}
+
 // sum over specific direction of a matrix
 func Sum(a *mat.Dense, direction directionType) *mat.Dense {
 	m := new(mat.Dense)
