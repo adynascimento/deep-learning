@@ -3,10 +3,10 @@ package main
 import (
 	"math"
 
-	network "github.com/adynascimento/deep-learning/neuralnetwork"
 	ngo "github.com/adynascimento/deep-learning/gonum"
+	network "github.com/adynascimento/deep-learning/neuralnetwork"
 
-	"github.com/adynascimento/plot/plot"
+	"github.com/adynascimento/plot/plotter"
 	"gonum.org/v1/gonum/mat"
 )
 
@@ -43,17 +43,22 @@ func main() {
 	yPred := model.Predict(xTrain)
 
 	// plotting
-	plt := plot.NewPlot()
+	plt := plotter.NewPlot()
 	plt.FigSize(12, 9)
 
 	plt.Plot(xTrain.RawMatrix().Data, yTrain.RawMatrix().Data)
-	plt.Plot(xTrain.RawMatrix().Data, yPred.RawMatrix().Data)
+	plt.Plot(xTrain.RawMatrix().Data, yPred.RawMatrix().Data,
+		plotter.WithLineColor(plotter.Blue),
+		plotter.WithMarker(plotter.Circle),
+		plotter.WithMarkerSpacing(8),
+	)
 	plt.Title("neural network predictions")
 	plt.XLabel("x values")
 	plt.YLabel("y values")
-	plt.Legend("true model", "prediction")
+	plt.Legend("function", "prediction")
 	plt.XLim(0.0, 1.0)
 	plt.YLim(-1.0, 1.0)
+	plt.Grid()
 
 	plt.Save("prediction.png")
 }
