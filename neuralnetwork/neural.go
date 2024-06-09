@@ -144,15 +144,29 @@ func (nm *neuralModel) Evaluate(x, y *mat.Dense) float64 {
 	case ModeRegression:
 		// mean squared error
 		metric = mat.Sum(ngo.Square(ngo.Sub(y, yPred))) / float64(y.RawMatrix().Cols)
+
 	case ModeMultiClass:
 		// accuracy
 		for j := 0; j < y.RawMatrix().Cols; j++ {
 			trueClass := floats.MaxIdx(mat.Col(nil, j, y))
 			predClass := floats.MaxIdx(mat.Col(nil, j, yPred))
-
 			if trueClass == predClass {
 				metric++
 			}
+		}
+		metric = (metric / float64(y.RawMatrix().Cols))
+
+	case ModeMultiLabel:
+		// hamming accuracy
+		for j := 0; j < y.RawMatrix().Cols; j++ {
+			correctLabels := 0.0
+			for i, pred := range mat.Col(nil, j, yPred) {
+				// round considers the threshold 0.5
+				if y.At(i, j) == math.Round(pred) {
+					correctLabels++
+				}
+			}
+			metric += correctLabels / float64(len(mat.Col(nil, j, yPred)))
 		}
 		metric = (metric / float64(y.RawMatrix().Cols))
 	}

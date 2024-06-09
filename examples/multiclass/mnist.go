@@ -9,12 +9,12 @@ import (
 
 func main() {
 	// training data
-	xTrain := dataset.LoadFromFile("../../dataset/mnist/train_x.csv")
-	yTrain := dataset.LoadFromFile("../../dataset/mnist/train_label.csv")
+	xTrain := dataset.LoadDataFromFile("../dataset/mnist/train_x.csv")
+	yTrain := dataset.LoadDataFromFile("../dataset/mnist/train_label.csv")
 
 	// testing data
-	xTest := dataset.LoadFromFile("../../dataset/mnist/test_x.csv")
-	yTest := dataset.LoadFromFile("../../dataset/mnist/test_label.csv")
+	xTest := dataset.LoadDataFromFile("../dataset/mnist/test_x.csv")
+	yTest := dataset.LoadDataFromFile("../dataset/mnist/test_label.csv")
 
 	// input and output features
 	inputDim := xTrain.RawMatrix().Rows

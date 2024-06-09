@@ -57,7 +57,7 @@ func Sum(a *mat.Dense, direction directionType) *mat.Dense {
 	return m
 }
 
-// add matrix with column vector row-wise
+// add "a" matrix with "b" column vector row-wise
 func AddMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
 	m := new(mat.Dense)
 	fn := func(row, _ int, v float64) float64 { return v + b.At(row, 0) }
@@ -66,7 +66,16 @@ func AddMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
 	return m
 }
 
-// division matrix with row vector column-wise
+// multiply "a" matrix with "b" column vector row-wise
+func MulMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
+	m := new(mat.Dense)
+	fn := func(row, _ int, v float64) float64 { return v * b.At(row, 0) }
+	m.Apply(fn, a)
+
+	return m
+}
+
+// division "a" matrix with "b" row vector column-wise
 func DivMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
 	m := new(mat.Dense)
 	fn := func(_, col int, v float64) float64 { return v / b.At(0, col) }

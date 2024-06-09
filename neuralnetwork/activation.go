@@ -24,6 +24,11 @@ var activationSettings = map[activationType]activation{
 		Function:   eluActivation,
 		Derivative: eluActivationDerivative,
 	},
+	ReLUActivation: {
+		Name:       ReLUActivation,
+		Function:   reluActivation,
+		Derivative: reluActivationDerivative,
+	},
 }
 
 type configMode struct {
@@ -53,13 +58,6 @@ var modeSettings = map[modeType]configMode{
 		},
 		lossFunction: binaryCrossEntropy,
 	},
-	ModeBinary: {
-		outputActivation: outputActivation{
-			Mode:     ModeBinary,
-			Function: applySigmoid,
-		},
-		lossFunction: binaryCrossEntropy,
-	},
 }
 
 type activationType string
@@ -72,11 +70,11 @@ const (
 	TanhActivation    activationType = "tanh"
 	SigmoidActivation activationType = "sigmoid"
 	EluActivation     activationType = "elu"
+	ReLUActivation    activationType = "relu"
 
-	ModeRegression modeType = "regression"  // linear output with mse loss
-	ModeMultiClass modeType = "multiclass"  // softmax output with cross entropy loss
-	ModeMultiLabel modeType = "multilabel"  // sigmoid output with binary cross entropy loss
-	ModeBinary     modeType = "binaryclass" // sigmoid output with binary cross entropy loss
+	ModeRegression modeType = "regression" // linear output with mse loss
+	ModeMultiClass modeType = "multiclass" // softmax output with cross entropy loss
+	ModeMultiLabel modeType = "multilabel" // sigmoid output with binary cross entropy loss
 )
 
 type activation struct {
@@ -95,17 +93,17 @@ func tanhActivationDerivative(x float64) float64 {
 	return 1.0 - tanhActivation(x)*tanhActivation(x)
 }
 
-// implements the Tanh function for use in activation functions.
+// implements the sigmoid function for use in activation functions.
 func sigmoidActivation(x float64) float64 {
 	return 1.0 / (1.0 + math.Exp(-x))
 }
 
-// implements the derivative of the Tanh function for backpropagation.
+// implements the derivative of the sigmoid function for backpropagation.
 func sigmoidActivationDerivative(x float64) float64 {
 	return sigmoidActivation(x) * (1.0 - sigmoidActivation(x))
 }
 
-// implements the Tanh function for use in activation functions.
+// implements the elu function for use in activation functions.
 func eluActivation(x float64) float64 {
 	var out float64
 	if x <= 0 {
@@ -116,7 +114,7 @@ func eluActivation(x float64) float64 {
 	return out
 }
 
-// implements the derivative of the Tanh function for backpropagation.
+// implements the derivative of the elu function for backpropagation.
 func eluActivationDerivative(x float64) float64 {
 	var out float64
 	if x < 0 {
@@ -125,6 +123,22 @@ func eluActivationDerivative(x float64) float64 {
 		out = 1.0
 	}
 	return out
+}
+
+// implements the relu function for use in activation functions.
+func reluActivation(x float64) float64 {
+	if x > 0 {
+		return x
+	}
+	return 0
+}
+
+// implements the derivative of the relu function for backpropagation.
+func reluActivationDerivative(x float64) float64 {
+	if x > 0 {
+		return 1
+	}
+	return 0
 }
 
 type outputActivation struct {
