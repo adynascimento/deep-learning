@@ -4,7 +4,7 @@ import (
 	"math"
 	"strconv"
 
-	ngo "github.com/adynascimento/deep-learning/gonum"
+	"github.com/adynascimento/deep-learning/ngo"
 
 	"gonum.org/v1/gonum/mat"
 )

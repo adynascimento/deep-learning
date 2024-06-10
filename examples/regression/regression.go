@@ -3,8 +3,8 @@ package main
 import (
 	"math"
 
-	ngo "github.com/adynascimento/deep-learning/gonum"
 	network "github.com/adynascimento/deep-learning/neuralnetwork"
+	"github.com/adynascimento/deep-learning/ngo"
 
 	"github.com/adynascimento/plot/plotter"
 	"gonum.org/v1/gonum/mat"

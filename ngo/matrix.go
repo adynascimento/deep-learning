@@ -1,4 +1,4 @@
-package gonum
+package ngo
 
 import (
 	"math/rand"

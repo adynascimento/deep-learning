@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/adynascimento/deep-learning/examples/dataset"
-	ngo "github.com/adynascimento/deep-learning/gonum"
 	network "github.com/adynascimento/deep-learning/neuralnetwork"
+	"github.com/adynascimento/deep-learning/ngo"
 	"github.com/adynascimento/deep-learning/nlp"
 )
 

@@ -6,7 +6,7 @@ import (
 
 	"gonum.org/v1/gonum/floats"
 
-	ngo "github.com/adynascimento/deep-learning/gonum"
+	"github.com/adynascimento/deep-learning/ngo"
 )
 
 func (hp *hyperparameter) RandomSearchOptimization(direction StudyDirection, model NeuralNetworkModel) {

@@ -3,7 +3,7 @@ package neuralnetwork
 import (
 	"math"
 
-	ngo "github.com/adynascimento/deep-learning/gonum"
+	"github.com/adynascimento/deep-learning/ngo"
 
 	"gonum.org/v1/gonum/mat"
 )
