@@ -11,9 +11,10 @@ import (
 type PCA interface {
 	Fit(m mat.Matrix)
 	Transform(m mat.Matrix) *mat.Dense
+	FitTransform(m mat.Matrix) *mat.Dense
+	InverseTransform(m mat.Matrix) *mat.Dense
 	GetComponents() *mat.Dense
 	GetExplainedVariance() []float64
-	InverseTransform(m mat.Matrix) *mat.Dense
 }
 
 type pca struct {
@@ -30,42 +31,42 @@ func NewPCA(nComponents int) PCA {
 }
 
 // performs a principal components analysis on the matrix of the input data
-// which is represented as an r × c matrix a where each
-// row is an observation and each column is a variable.
+// which is represented as an rows X cols matrix a where each
+// row is a variable and each column is an observation.
+// matrix shape (nFeatures, nSamples)
 func (p *pca) Fit(m mat.Matrix) {
 	data := mat.DenseCopyOf(m)
 	rows, cols := data.Dims()
 
 	// center the data by subtracting the mean
-	p.mean = make([]float64, cols)
-	for j := 0; j < cols; j++ {
-		mean := stat.Mean(mat.Col(nil, j, data), nil)
-		p.mean[j] = mean
-		for i := 0; i < rows; i++ {
+	p.mean = make([]float64, rows)
+	for i := 0; i < rows; i++ {
+		mean := stat.Mean(mat.Row(nil, i, data), nil)
+		p.mean[i] = mean
+		for j := 0; j < cols; j++ {
 			data.Set(i, j, data.At(i, j)-mean)
 		}
 	}
 
 	// calculate the SVD decomposition
 	svd := &mat.SVD{}
-	if ok := svd.Factorize(data, mat.SVDFull); !ok {
+	if ok := svd.Factorize(data.T(), mat.SVDFull); !ok {
 		log.Fatal("error in SVD decomposition")
 	}
 
 	// get the eigenvectors (principal components)
 	var dst mat.Dense
 	svd.VTo(&dst)
-	p.components = mat.DenseCopyOf(dst.T())
-	p.components = mat.DenseCopyOf(p.components.Slice(0, p.nComponents, 0, cols))
+	p.components = mat.DenseCopyOf(dst.Slice(0, rows, 0, p.nComponents))
 
 	// calculate variance ratio
-	singularValues := svd.Values(nil)[:p.nComponents]
+	singularValues := svd.Values(nil)
 	floats.MulTo(singularValues, singularValues, singularValues)
-	floats.ScaleTo(singularValues, 1.0/float64(rows-1), singularValues)
+	floats.ScaleTo(singularValues, 1.0/float64(cols-1), singularValues)
 
 	totalVariance := floats.Sum(singularValues)
-	p.varianceRatio = make([]float64, len(singularValues))
-	for i, singularValue := range singularValues {
+	p.varianceRatio = make([]float64, len(singularValues[:p.nComponents]))
+	for i, singularValue := range singularValues[:p.nComponents] {
 		p.varianceRatio[i] = singularValue / totalVariance
 	}
 }
@@ -77,23 +78,30 @@ func (p *pca) Transform(m mat.Matrix) *mat.Dense {
 	rows, cols := data.Dims()
 
 	// center the data by subtracting the mean
-	for j := 0; j < cols; j++ {
-		for i := 0; i < rows; i++ {
-			data.Set(i, j, data.At(i, j)-p.mean[j])
+	for i := 0; i < rows; i++ {
+		for j := 0; j < cols; j++ {
+			data.Set(i, j, data.At(i, j)-p.mean[i])
 		}
 	}
 
-	return MatMul(data, p.components.T())
+	return MatMul(p.components.T(), data)
+}
+
+// FitTransform is exactly equivalent to calling Fit()
+// followed by Transform()
+func (p *pca) FitTransform(m mat.Matrix) *mat.Dense {
+	p.Fit(m)
+	return p.Transform(m)
 }
 
 // transforms data back to the original space
 func (p *pca) InverseTransform(m mat.Matrix) *mat.Dense {
-	_, cols := p.components.Dims()
+	rows, _ := p.components.Dims()
 
-	reconstructed := MatMul(mat.DenseCopyOf(m), p.components)
-	for j := 0; j < cols; j++ {
-		for i := 0; i < reconstructed.RawMatrix().Rows; i++ {
-			reconstructed.Set(i, j, reconstructed.At(i, j)+p.mean[j])
+	reconstructed := MatMul(p.components, mat.DenseCopyOf(m))
+	for i := 0; i < rows; i++ {
+		for j := 0; j < reconstructed.RawMatrix().Cols; j++ {
+			reconstructed.Set(i, j, reconstructed.At(i, j)+p.mean[i])
 		}
 	}
 

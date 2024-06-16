@@ -90,7 +90,10 @@ func (nn *neuralNetwork) NewTrainer(config TrainerConfig) NeuralModel {
 	}
 }
 
-// train model
+// performs model training with the xTrain and yTrain matrices,
+// which is represented as an rows X cols matrix a where each
+// row is a variable and each column is an observation.
+// matrix shape (nFeatures, nSamples)
 func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, printLoss bool) []float64 {
 	// keep track of the loss
 	start := time.Now()
