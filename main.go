@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/adynascimento/deep-learning/cnn"
 	"github.com/adynascimento/deep-learning/examples/dataset"
 	"github.com/adynascimento/deep-learning/ngo"
@@ -17,15 +19,23 @@ func main() {
 
 	// training data
 	x := dataset.LoadDataFromFile("examples/dataset/mnist/train_x_shuffled.csv")
+	v := dataset.LoadDataFromFile("examples/dataset/mnist/test_x.csv")
 	applyNormalization := func(_, _ int, v float64) float64 { return v / 255.0 }
 	x = ngo.Apply(applyNormalization, x)
+	v = ngo.Apply(applyNormalization, v)
 
 	xTrain := make([][]*mat.Dense, x.RawMatrix().Cols)
-	yTrain := dataset.LoadDataFromFile("examples/dataset/mnist/train_label_shuffled.csv")
+	xTest := make([][]*mat.Dense, v.RawMatrix().Cols)
 	for i := range xTrain {
 		xTrain[i] = make([]*mat.Dense, 1)
 		xTrain[i][0] = mat.NewDense(28, 28, mat.Col(nil, i, x))
 	}
+	for i := range xTest {
+		xTest[i] = make([]*mat.Dense, 1)
+		xTest[i][0] = mat.NewDense(28, 28, mat.Col(nil, i, v))
+	}
+	yTrain := dataset.LoadDataFromFile("examples/dataset/mnist/train_label_shuffled.csv")
+	yTest := dataset.LoadDataFromFile("examples/dataset/mnist/test_label.csv")
 
 	// neural network model
 	neural := cnn.NewConvNeuralNetwork(cnn.CNNConfig{
@@ -33,10 +43,8 @@ func main() {
 		Activation: cnn.ReLUActivation,
 		Mode:       cnn.ModeMultiClass,
 	})
-	neural.AddConvLayer(8, 3, 1)
-	neural.AddPoolLayer(2, 2)
-	neural.AddConvLayer(16, 3, 1)
-	neural.AddPoolLayer(2, 2)
+	neural.AddConv2DLayer(8, 3, 1)
+	neural.AddMaxPooling2DLayer(2, 2)
 	neural.AddDenseLayer([]int{128, yTrain.RawMatrix().Rows})
 
 	// optimizer to train the model
@@ -47,6 +55,10 @@ func main() {
 		NIterations:      20,                // number of iterations
 		BatchSize:        32,                // batch size
 	})
-	// model.Summary()
+	model.Summary()
 	model.Fit(xTrain, yTrain, true)
+
+	// accuracy of the model making predictions
+	fmt.Printf("accuracy of training data: %.4f \n", model.Evaluate(xTrain, yTrain))
+	fmt.Printf("accuracy of testing data:  %.4f \n", model.Evaluate(xTest, yTest))
 }

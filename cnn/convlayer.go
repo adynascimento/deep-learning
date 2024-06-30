@@ -12,6 +12,8 @@ type convLayer struct {
 	Parameters      parameters
 	Activation      activation
 	Optimizer       convOptimizer
+	NFilters        int
+	FilterSize      int
 	Stride          int
 	Iter            float64
 }
@@ -59,6 +61,8 @@ func newConvLayer(nFilters, filterSize, stride int, activation activation, optTy
 		},
 		Activation: activation,
 		Optimizer:  optimizer,
+		NFilters:   nFilters,
+		FilterSize: filterSize,
 		Stride:     stride,
 		Iter:       1,
 	}
