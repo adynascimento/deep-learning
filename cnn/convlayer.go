@@ -1,6 +1,8 @@
 package cnn
 
 import (
+	"sync"
+
 	"github.com/adynascimento/deep-learning/ngo"
 	"gonum.org/v1/gonum/mat"
 )
@@ -97,27 +99,33 @@ func (cl *convLayer) ForwardPropagation(x [][]*mat.Dense) ([][]*mat.Dense, [][]*
 	}
 
 	applyActivationFunction := func(_, _ int, v float64) float64 { return cl.Activation.Function(v) }
+	var wg sync.WaitGroup
 	for t := 0; t < nTraining; t++ {
 		for f := 0; f < nFilters; f++ {
-			for i := 0; i < hOut; i++ {
-				for j := 0; j < wOut; j++ {
-					sum := 0.0
-					for c := 0; c < nChannels; c++ {
-						filter := W[f][c]
-						for k := 0; k < filterSize; k++ {
-							for l := 0; l < filterSize; l++ {
-								sum += x[t][c].At(i*stride+k, j*stride+l) * filter.At(k, l)
+			wg.Add(1)
+			go func(t, f int) {
+				defer wg.Done()
+				for i := 0; i < hOut; i++ {
+					for j := 0; j < wOut; j++ {
+						sum := 0.0
+						for c := 0; c < nChannels; c++ {
+							filter := W[f][c]
+							for k := 0; k < filterSize; k++ {
+								for l := 0; l < filterSize; l++ {
+									sum += x[t][c].At(i*stride+k, j*stride+l) * filter.At(k, l)
+								}
 							}
 						}
+						// compute the linear operation
+						Z[t][f].Set(i, j, sum+b.At(f, 0))
 					}
-					// compute the linear operation
-					Z[t][f].Set(i, j, sum+b.At(f, 0))
 				}
-			}
-			// compute the non linear operation
-			A[t][f] = ngo.Apply(applyActivationFunction, Z[t][f])
+				// compute the non linear operation
+				A[t][f] = ngo.Apply(applyActivationFunction, Z[t][f])
+			}(t, f)
 		}
 	}
+	wg.Wait()
 
 	return Z, A
 }
@@ -166,26 +174,21 @@ func (cl *convLayer) BackwardPropagation(x [][]*mat.Dense, Z, dA [][]*mat.Dense,
 			dZ := ngo.Multiply(dA[t][f], ngo.Apply(applyActivationDerivative, Z[t][f]))
 			for i := 0; i < hOut; i++ {
 				for j := 0; j < wOut; j++ {
-					// gradient of Z with respect to W
+					dZValue := dZ.At(i, j)
 					for c := 0; c < nChannels; c++ {
 						for k := 0; k < filterSize; k++ {
 							for l := 0; l < filterSize; l++ {
-								dW[f][c].Set(k, l, dW[f][c].At(k, l)+dZ.At(i, j)*x[t][c].At(i*stride+k, j*stride+l))
+								// gradient of Z with respect to W
+								dW[f][c].Set(k, l, dW[f][c].At(k, l)+dZValue*x[t][c].At(i*stride+k, j*stride+l))
+
+								// gradient of Z with respect to x
+								dxPrev[t][c].Set(i*stride+k, j*stride+l, dxPrev[t][c].At(i*stride+k, j*stride+l)+dZValue*W[f][c].At(k, l))
 							}
 						}
 					}
 
 					// gradient of Z with respect to b
-					db.Set(f, 0, db.At(f, 0)+dZ.At(i, j))
-
-					// gradient of Z with respect to x
-					for c := 0; c < nChannels; c++ {
-						for k := 0; k < filterSize; k++ {
-							for l := 0; l < filterSize; l++ {
-								dxPrev[t][c].Set(i*stride+k, j*stride+l, dxPrev[t][c].At(i*stride+k, j*stride+l)+dZ.At(i, j)*W[f][c].At(k, l))
-							}
-						}
-					}
+					db.Set(f, 0, db.At(f, 0)+dZValue)
 				}
 			}
 		}
