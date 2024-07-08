@@ -2,23 +2,16 @@ package main
 
 import (
 	"fmt"
-	"image"
-	"image/color"
-	"log"
-	"math"
-	"os"
 
 	"github.com/adynascimento/deep-learning/cnn"
-	"github.com/adynascimento/deep-learning/examples/dataset"
 	"github.com/adynascimento/deep-learning/ngo"
-	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"
 )
 
 func main() {
 	// training data
-	x := dataset.LoadDataFromFile("examples/dataset/mnist/train_x_shuffled.csv")
-	v := dataset.LoadDataFromFile("examples/dataset/mnist/test_x.csv")
+	x := LoadDataFromFile("examples/dataset/mnist/train_x_shuffled.csv")
+	v := LoadDataFromFile("examples/dataset/mnist/test_x.csv")
 	applyNormalization := func(_, _ int, v float64) float64 { return v / 255.0 }
 	x = ngo.Apply(applyNormalization, x)
 	v = ngo.Apply(applyNormalization, v)
@@ -33,8 +26,8 @@ func main() {
 		xTest[i] = make([]*mat.Dense, 1)
 		xTest[i][0] = mat.NewDense(28, 28, mat.Col(nil, i, v))
 	}
-	yTrain := dataset.LoadDataFromFile("examples/dataset/mnist/train_label_shuffled.csv")
-	yTest := dataset.LoadDataFromFile("examples/dataset/mnist/test_label.csv")
+	yTrain := LoadDataFromFile("examples/dataset/mnist/train_label_shuffled.csv")
+	yTest := LoadDataFromFile("examples/dataset/mnist/test_label.csv")
 
 	// neural network model
 	neural := cnn.NewConvNeuralNetwork(cnn.CNNConfig{
@@ -63,44 +56,6 @@ func main() {
 	fmt.Printf("accuracy of training data: %.4f \n", model.Evaluate(xTrain, yTrain))
 	fmt.Printf("accuracy of testing data:  %.4f \n", model.Evaluate(xTest, yTest))
 
-	number, probability := predictFromImage(model, "examples/dataset/mnist/numbers/4.png")
+	number, probability := PredictFromImage(model, "examples/dataset/mnist/numbers/4.png")
 	fmt.Printf("prediction of the model: number %d (%.1f%% probability)\n", number, probability)
-}
-
-func predictFromImage(model cnn.CNNModel, path string) (int, float64) {
-	// make predictions
-	yPred := model.Predict(loadFromImage(path))
-
-	fmt.Println("prediction from image:")
-	fmt.Println(mat.Formatted(yPred))
-	idx := floats.MaxIdx(mat.Col(nil, 0, yPred))
-
-	return idx, math.Floor(yPred.At(idx, 0)*1000.0) / 10.0
-}
-
-func loadFromImage(path string) [][]*mat.Dense {
-	file, err := os.Open(path)
-	if err != nil {
-		log.Println("error loading image from file:", err.Error())
-	}
-	defer file.Close()
-
-	img, _, err := image.Decode(file)
-	if err != nil {
-		log.Println("error decoding image:", err.Error())
-	}
-
-	var values []float64
-	for y := 0; y < img.Bounds().Max.Y; y++ {
-		for x := 0; x < img.Bounds().Max.X; x++ {
-			v := float64(color.GrayModel.Convert(img.At(x, y)).(color.Gray).Y)
-			values = append(values, float64(v)/255.0)
-		}
-	}
-
-	m := make([][]*mat.Dense, 1)
-	m[0] = make([]*mat.Dense, 1)
-	m[0][0] = mat.NewDense(img.Bounds().Max.X, img.Bounds().Max.Y, values)
-
-	return m
 }

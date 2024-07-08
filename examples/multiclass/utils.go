@@ -1,4 +1,4 @@
-package dataset
+package main
 
 import (
 	"encoding/csv"
@@ -39,30 +39,8 @@ func LoadDataFromFile(path string) *mat.Dense {
 	return m
 }
 
-func LoadTextsFromFile(path string) []string {
-	file, err := os.Open(path)
-	if err != nil {
-		log.Println("error loading features from file:", err.Error())
-	}
-	defer file.Close()
-
-	lines, err := csv.NewReader(file).ReadAll()
-	if err != nil {
-		log.Println("error reading features from file:", err.Error())
-	}
-
-	var texts []string
-	for _, line := range lines {
-		if len(line) > 0 {
-			texts = append(texts, line[0])
-		}
-	}
-
-	return texts
-}
-
 func PredictFromImage(model network.NeuralModel, path string) (int, float64) {
-	x := loadFromImage(path)
+	x := LoadFromImage(path)
 
 	// make predictions
 	yPred := model.Predict(x)
@@ -74,7 +52,7 @@ func PredictFromImage(model network.NeuralModel, path string) (int, float64) {
 	return idx, math.Floor(yPred.At(idx, 0)*1000.0) / 10.0
 }
 
-func loadFromImage(path string) *mat.Dense {
+func LoadFromImage(path string) *mat.Dense {
 	file, err := os.Open(path)
 	if err != nil {
 		log.Println("error loading image from file:", err.Error())
