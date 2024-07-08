@@ -79,7 +79,6 @@ func (cl *convLayer) ForwardPropagation(x [][]*mat.Dense) ([][]*mat.Dense, [][]*
 
 	nFilters := len(W)
 	nChannels := len(W[0])
-	filterSize, _ := W[0][0].Dims()
 
 	// output dimension
 	hOut := cl.OutputShape[1]
@@ -98,32 +97,30 @@ func (cl *convLayer) ForwardPropagation(x [][]*mat.Dense) ([][]*mat.Dense, [][]*
 		}
 	}
 
-	applyActivationFunction := func(_, _ int, v float64) float64 { return cl.Activation.Function(v) }
 	var wg sync.WaitGroup
+	workers := make(chan struct{}, 8)
+
+	applyActivationFunction := func(_, _ int, v float64) float64 { return cl.Activation.Function(v) }
 	for t := 0; t < nTraining; t++ {
-		for f := 0; f < nFilters; f++ {
-			wg.Add(1)
-			go func(t, f int) {
-				defer wg.Done()
-				for i := 0; i < hOut; i++ {
-					for j := 0; j < wOut; j++ {
-						sum := 0.0
-						for c := 0; c < nChannels; c++ {
-							filter := W[f][c]
-							for k := 0; k < filterSize; k++ {
-								for l := 0; l < filterSize; l++ {
-									sum += x[t][c].At(i*stride+k, j*stride+l) * filter.At(k, l)
-								}
-							}
-						}
-						// compute the linear operation
-						Z[t][f].Set(i, j, sum+b.At(f, 0))
-					}
+		wg.Add(1)
+		workers <- struct{}{}
+		go func(t int) {
+			defer wg.Done()
+			defer func() { <-workers }()
+
+			for f := 0; f < nFilters; f++ {
+				convolve := mat.NewDense(hOut, wOut, nil)
+				for c := 0; c < nChannels; c++ {
+					convolve = ngo.Add(convolve, Convolve2D(x[t][c], W[f][c], stride))
 				}
-				// compute the non linear operation
-				A[t][f] = ngo.Apply(applyActivationFunction, Z[t][f])
-			}(t, f)
-		}
+
+				applyBias := func(_, _ int, v float64) float64 { return v + b.At(f, 0) }
+				convolve = ngo.Apply(applyBias, convolve)
+
+				Z[t][f] = convolve
+				A[t][f] = ngo.Apply(applyActivationFunction, convolve)
+			}
+		}(t)
 	}
 	wg.Wait()
 
@@ -140,10 +137,6 @@ func (cl *convLayer) BackwardPropagation(x [][]*mat.Dense, Z, dA [][]*mat.Dense,
 	nFilters := len(W)
 	nChannels := len(W[0])
 	filterSize, _ := W[0][0].Dims()
-
-	// output dimension
-	hOut := cl.OutputShape[1]
-	wOut := cl.OutputShape[2]
 
 	// initialize gradients
 	dW := make([][]*mat.Dense, nFilters) // derivatives of the weigths W
@@ -166,33 +159,45 @@ func (cl *convLayer) BackwardPropagation(x [][]*mat.Dense, Z, dA [][]*mat.Dense,
 		}
 	}
 
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	workers := make(chan struct{}, 15)
+
 	applyActivationDerivative := func(_, _ int, v float64) float64 { return cl.Activation.Derivative(v) }
 	for t := 0; t < nTraining; t++ {
-		// calculate gradient
-		for f := 0; f < nFilters; f++ {
-			// apply gradient of activation function to dA
-			dZ := ngo.Multiply(dA[t][f], ngo.Apply(applyActivationDerivative, Z[t][f]))
-			for i := 0; i < hOut; i++ {
-				for j := 0; j < wOut; j++ {
-					dZValue := dZ.At(i, j)
-					for c := 0; c < nChannels; c++ {
-						for k := 0; k < filterSize; k++ {
-							for l := 0; l < filterSize; l++ {
-								// gradient of Z with respect to W
-								dW[f][c].Set(k, l, dW[f][c].At(k, l)+dZValue*x[t][c].At(i*stride+k, j*stride+l))
+		wg.Add(1)
+		workers <- struct{}{}
+		go func(t int) {
+			defer wg.Done()
+			defer func() { <-workers }()
 
-								// gradient of Z with respect to x
-								dxPrev[t][c].Set(i*stride+k, j*stride+l, dxPrev[t][c].At(i*stride+k, j*stride+l)+dZValue*W[f][c].At(k, l))
-							}
-						}
-					}
+			for f := 0; f < nFilters; f++ {
+				// apply gradient of activation function to dA
+				dZ := ngo.Multiply(dA[t][f], ngo.Apply(applyActivationDerivative, Z[t][f]))
+				for c := 0; c < nChannels; c++ {
+					// gradient of Z with respect to W
+					convolve := Convolve2D(x[t][c], dZ, stride)
+					mu.Lock()
+					dW[f][c] = ngo.Add(dW[f][c], convolve)
+					mu.Unlock()
 
-					// gradient of Z with respect to b
-					db.Set(f, 0, db.At(f, 0)+dZValue)
+					// gradient of Z with respect to x
+					convolve = Convolve2D(
+						ngo.ZeroPadding(dZ, filterSize-1),
+						ngo.Rotate180(W[f][c]),
+						stride)
+					mu.Lock()
+					dxPrev[t][c] = ngo.Add(dxPrev[t][c], convolve)
+					mu.Unlock()
 				}
+
+				mu.Lock()
+				db.Set(f, 0, db.At(f, 0)+mat.Sum(dZ))
+				mu.Unlock()
 			}
-		}
+		}(t)
 	}
+	wg.Wait()
 
 	// update parameters (optimization algorithm)
 	cl.Parameters = cl.Optimizer.Function(&cl.Optimizer, cl.Parameters, dW, db, learningRate, cl.Iter)
