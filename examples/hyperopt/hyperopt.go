@@ -4,15 +4,17 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/adynascimento/deep-learning/examples/dataset"
 	"github.com/adynascimento/deep-learning/hyperopt"
 	network "github.com/adynascimento/deep-learning/neuralnetwork"
+	"github.com/adynascimento/deep-learning/ngo"
 )
 
 func main() {
 	// training data
-	xTrain := dataset.LoadDataFromFile("../../dataset/mnist/train_x.csv")
-	yTrain := dataset.LoadDataFromFile("../../dataset/mnist/train_label.csv")
+	xTrain := LoadDataFromFile("../dataset/mnist/train_x_shuffled.csv")
+	yTrain := LoadDataFromFile("../dataset/mnist/train_label_shuffled.csv")
+	applyNormalization := func(_, _ int, v float64) float64 { return v / 255.0 }
+	xTrain = ngo.Apply(applyNormalization, xTrain)
 
 	neuralNetworkModel := func(trialID int, params hyperopt.Params) float64 {
 		// neural network model
@@ -27,7 +29,8 @@ func main() {
 			Optimizer:        network.AdamOptimizer,   // optimizer
 			LearningRate:     params.LearningRate,     // learning rate
 			L2Regularization: params.L2Regularization, // l2 regularization
-			NIterations:      1000,                    // number of iterations
+			NIterations:      200,                     // number of iterations
+			BatchSize:        32,                      // batch size
 		})
 		model.Fit(xTrain, yTrain, false)
 		model.Save("./trials/networkmodel" + strconv.Itoa(trialID) + ".json")

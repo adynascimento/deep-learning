@@ -33,6 +33,7 @@ func main() {
 		LearningRate:     0.001,                 // learning rate
 		L2Regularization: 1.40e-06,              // l2 regularization
 		NIterations:      10000,                 // number of iterations
+		BatchSize:        32,                    // batch size
 	})
 	model.Fit(xTrain, yTrain, true)
 

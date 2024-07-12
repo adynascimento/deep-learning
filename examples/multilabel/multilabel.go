@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/adynascimento/deep-learning/examples/dataset"
 	network "github.com/adynascimento/deep-learning/neuralnetwork"
 	"github.com/adynascimento/deep-learning/ngo"
 	"github.com/adynascimento/deep-learning/nlp"
@@ -11,8 +10,8 @@ import (
 
 func main() {
 	// loading data
-	data := dataset.LoadTextsFromFile("../dataset/multilabel/texts.csv")
-	dataLabel := dataset.LoadDataFromFile("../dataset/multilabel/texts_label.csv")
+	data := LoadTextsFromFile("../dataset/multilabel/texts.csv")
+	dataLabel := LoadDataFromFile("../dataset/multilabel/texts_label.csv")
 
 	// preprocessing dataset by doing vectorizaton
 	vectorizer := nlp.NewCountVectorizer(3000)
@@ -38,6 +37,7 @@ func main() {
 		LearningRate:     1e-03,                 // learning rate
 		L2Regularization: 1e-5,                  // l2 regularization
 		NIterations:      5000,                  // number of iterations
+		BatchSize:        32,                    // batch size
 	})
 	model.Fit(xTrain, yTrain, true)
 

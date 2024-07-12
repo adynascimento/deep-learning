@@ -3,18 +3,22 @@ package main
 import (
 	"fmt"
 
-	"github.com/adynascimento/deep-learning/examples/dataset"
 	network "github.com/adynascimento/deep-learning/neuralnetwork"
+	"github.com/adynascimento/deep-learning/ngo"
 )
 
 func main() {
 	// training data
-	xTrain := dataset.LoadDataFromFile("../dataset/mnist/train_x.csv")
-	yTrain := dataset.LoadDataFromFile("../dataset/mnist/train_label.csv")
+	xTrain := LoadDataFromFile("../dataset/mnist/train_x_shuffled.csv")
+	yTrain := LoadDataFromFile("../dataset/mnist/train_label_shuffled.csv")
 
 	// testing data
-	xTest := dataset.LoadDataFromFile("../dataset/mnist/test_x.csv")
-	yTest := dataset.LoadDataFromFile("../dataset/mnist/test_label.csv")
+	xTest := LoadDataFromFile("../dataset/mnist/test_x.csv")
+	yTest := LoadDataFromFile("../dataset/mnist/test_label.csv")
+
+	applyNormalization := func(_, _ int, v float64) float64 { return v / 255.0 }
+	xTrain = ngo.Apply(applyNormalization, xTrain)
+	xTest = ngo.Apply(applyNormalization, xTest)
 
 	// input and output features
 	inputDim := xTrain.RawMatrix().Rows
@@ -31,9 +35,11 @@ func main() {
 	model := neural.NewTrainer(network.TrainerConfig{
 		Optimizer:        network.AdamOptimizer, // optimizer
 		LearningRate:     0.0075,                // learning rate
-		L2Regularization: 1.40e-06,              // l2 regularization
-		NIterations:      1000,                  // number of iterations
+		L2Regularization: 1.40e-07,              // l2 regularization
+		NIterations:      200,                   // number of iterations
+		BatchSize:        32,                    // batch size
 	})
+	model.Summary()
 	model.Fit(xTrain, yTrain, true)
 
 	// saves neural network model to file
@@ -43,6 +49,6 @@ func main() {
 	fmt.Printf("accuracy of training data: %.4f \n", model.Evaluate(xTrain, yTrain))
 	fmt.Printf("accuracy of testing data:  %.4f \n", model.Evaluate(xTest, yTest))
 
-	number, probability := dataset.PredictFromImage(model, "dataset/numbers/4.png")
+	number, probability := PredictFromImage(model, "../dataset/mnist/numbers/4.png")
 	fmt.Printf("prediction of the model: number %d (%.1f %% probability)\n", number, probability)
 }

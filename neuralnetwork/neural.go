@@ -3,13 +3,16 @@ package neuralnetwork
 import (
 	"fmt"
 	"math"
+	"os"
 	"strconv"
 	"time"
 
 	"github.com/adynascimento/deep-learning/ngo"
+	"github.com/olekukonko/tablewriter"
 
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"
+	"gonum.org/v1/gonum/stat"
 )
 
 type NeuralNetwork interface {
@@ -21,6 +24,7 @@ type NeuralModel interface {
 	Predict(x *mat.Dense) *mat.Dense
 	Evaluate(x *mat.Dense, y *mat.Dense) float64
 	Save(path string)
+	Summary()
 }
 
 type NeuralConfig struct {
@@ -34,6 +38,7 @@ type TrainerConfig struct {
 	LearningRate     float64
 	L2Regularization float64
 	NIterations      int
+	BatchSize        int
 }
 
 type neuralNetwork struct {
@@ -51,6 +56,7 @@ type neuralModel struct {
 	LearningRate     float64
 	L2Regularization float64
 	NIterations      int
+	BatchSize        int
 }
 
 func NewNeuralNetwork(config NeuralConfig) NeuralNetwork {
@@ -87,7 +93,61 @@ func (nn *neuralNetwork) NewTrainer(config TrainerConfig) NeuralModel {
 		LearningRate:     config.LearningRate,
 		L2Regularization: config.L2Regularization,
 		NIterations:      config.NIterations,
+		BatchSize:        config.BatchSize,
 	}
+}
+
+// forward propagation step
+func (nm *neuralModel) ForwardPropagation(x *mat.Dense) (*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense) {
+	L := len(nm.Parameters) / 2      // number of layers
+	Z := make(map[string]*mat.Dense) // linear function
+	A := make(map[string]*mat.Dense) // activation function
+	A[strconv.Itoa(0)] = x
+
+	applyActivationFunction := func(_, _ int, v float64) float64 { return nm.Activation.Function(v) }
+	for l := 0; l < L-1; l++ {
+		W := nm.Parameters["W"+strconv.Itoa(l+1)] // weights W
+		b := nm.Parameters["b"+strconv.Itoa(l+1)] // biases b
+
+		Z[strconv.Itoa(l+1)] = ngo.AddMatrixVector(ngo.MatMul(W, A[strconv.Itoa(l)]), b) // compute the linear operation
+		A[strconv.Itoa(l+1)] = ngo.Apply(applyActivationFunction, Z[strconv.Itoa(l+1)])  // compute the non linear operation
+	}
+	// for output layer
+	Z[strconv.Itoa(L)] = ngo.AddMatrixVector(ngo.MatMul(nm.Parameters["W"+strconv.Itoa(L)],
+		A[strconv.Itoa(L-1)]), nm.Parameters["b"+strconv.Itoa(L)])
+	A[strconv.Itoa(L)] = nm.OutputActivation.Function(Z[strconv.Itoa(L)])
+
+	// prediction
+	yHat := A[strconv.Itoa(L)]
+
+	return yHat, Z, A
+}
+
+// backward propagation step
+func (nm *neuralModel) BackwardPropagation(Z, A map[string]*mat.Dense, y *mat.Dense) (map[string]*mat.Dense, map[string]*mat.Dense) {
+	m := y.RawMatrix().Cols     // number of training examples
+	L := len(nm.Parameters) / 2 // number of layers
+
+	dZ := make(map[string]*mat.Dense) // derivatives of the linear function Z
+	dW := make(map[string]*mat.Dense) // derivatives of the weigths W
+	db := make(map[string]*mat.Dense) // derivatives of the biases b
+	dA := make(map[string]*mat.Dense) // derivatives of the activation function A
+
+	dZ[strconv.Itoa(L)] = ngo.Scale(1./float64(m), ngo.Sub(A[strconv.Itoa(L)], y))
+	dW[strconv.Itoa(L)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(L)], A[strconv.Itoa(L-1)].T()),
+		ngo.Scale(nm.L2Regularization/float64(m), nm.Parameters["W"+strconv.Itoa(L)]))
+	db[strconv.Itoa(L)] = ngo.Sum(dZ[strconv.Itoa(L)], ngo.OverColumns)
+
+	applyActivationFunctionDerivative := func(_, _ int, v float64) float64 { return nm.Activation.Derivative(v) }
+	for l := L - 1; l > 0; l-- {
+		dA[strconv.Itoa(l)] = ngo.MatMul(nm.Parameters["W"+strconv.Itoa(l+1)].T(), dZ[strconv.Itoa(l+1)])
+		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], ngo.Apply(applyActivationFunctionDerivative, Z[strconv.Itoa(l)]))
+		dW[strconv.Itoa(l)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(l)], A[strconv.Itoa(l-1)].T()),
+			ngo.Scale(nm.L2Regularization/float64(m), nm.Parameters["W"+strconv.Itoa(l)]))
+		db[strconv.Itoa(l)] = ngo.Sum(dZ[strconv.Itoa(l)], ngo.OverColumns)
+	}
+
+	return dW, db
 }
 
 // performs model training with the xTrain and yTrain matrices,
@@ -96,35 +156,50 @@ func (nn *neuralNetwork) NewTrainer(config TrainerConfig) NeuralModel {
 // matrix shape (nFeatures, nSamples)
 func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, printLoss bool) []float64 {
 	// keep track of the loss
-	start := time.Now()
 	losses := []float64{}
+
+	start := time.Now()
+	_, nSamples := xTrain.Dims()
 
 	// loop
 	for i := 1; i <= nm.NIterations; i++ {
-		// forward propagation
-		yHat, Z, A := forwardPropagation(nm.Parameters, xTrain, nm.Activation.Function,
-			nm.OutputActivation.Function)
+		lossBatches := []float64{}
 
-		// loss function
-		loss := nm.LossFunction(yHat, yTrain, nm.Parameters, nm.L2Regularization)
+		for startIdx := 0; startIdx < nSamples; startIdx += nm.BatchSize {
+			endIdx := startIdx + nm.BatchSize
+			if endIdx > nSamples {
+				endIdx = nSamples
+			}
 
-		// backward propagation
-		dW, db := backwardPropagation(nm.Parameters, Z, A, yTrain, nm.Activation.Derivative, nm.L2Regularization)
+			xBatch := xTrain.Slice(0, xTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)
+			yBatch := yTrain.Slice(0, yTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)
 
-		// update parameters (optimization algorithm)
-		nm.Parameters = nm.Optimizer.Function(&nm.Optimizer, nm.Parameters, dW, db,
-			nm.LearningRate, float64(i))
+			// forward propagation
+			yHat, Z, A := nm.ForwardPropagation(xBatch)
+
+			// loss function
+			loss := nm.LossFunction(yHat, yBatch, nm.Parameters, nm.L2Regularization)
+			lossBatches = append(lossBatches, loss)
+
+			// backward propagation
+			dW, db := nm.BackwardPropagation(Z, A, yBatch)
+
+			// update parameters (optimization algorithm)
+			nm.Parameters = nm.Optimizer.Function(&nm.Optimizer, nm.Parameters, dW, db,
+				nm.LearningRate, float64(i))
+		}
 
 		// print the loss every x iterations
-		losses = append(losses, loss)
+		meanLoss := stat.Mean(lossBatches, nil)
 		if printLoss && i%(nm.NIterations/10) == 0 || printLoss && i == 1 {
 			if nm.Mode == ModeRegression {
-				fmt.Printf("iter %6d/%d: | t: %5.2fs | loss: %.6e \n", i, nm.NIterations, time.Since(start).Seconds(), loss)
+				fmt.Printf("iter %6d/%d: | t: %5.2fs | loss: %.6e \n", i, nm.NIterations, time.Since(start).Seconds(), meanLoss)
 			} else {
 				fmt.Printf("iter %6d/%d: | t: %5.2fs | loss: %.6e | acc: %.4f \n", i, nm.NIterations,
-					time.Since(start).Seconds(), loss, nm.Evaluate(xTrain, yTrain))
+					time.Since(start).Seconds(), meanLoss, nm.Evaluate(xTrain, yTrain))
 			}
 		}
+		losses = append(losses, meanLoss)
 	}
 
 	return losses
@@ -132,9 +207,7 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, printLoss bool) []float64 
 
 // predictions with forward propagation
 func (nm *neuralModel) Predict(x *mat.Dense) *mat.Dense {
-	predictions, _, _ := forwardPropagation(nm.Parameters, x, nm.Activation.Function,
-		nm.OutputActivation.Function)
-
+	predictions, _, _ := nm.ForwardPropagation(x)
 	return predictions
 }
 
@@ -177,6 +250,24 @@ func (nm *neuralModel) Evaluate(x, y *mat.Dense) float64 {
 	return metric
 }
 
+// model summary
+func (nm *neuralModel) Summary() {
+	data := [][]string{}
+	for i, v := range nm.NNStructure[1:] {
+		data = append(data, []string{
+			fmt.Sprintf("Dense Layer %d", i+1), fmt.Sprintf("(None, %d)", v), fmt.Sprintf("%d",
+				nm.NNStructure[i]*nm.NNStructure[i+1]+nm.NNStructure[i+1]),
+		})
+	}
+
+	// table configuration
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Layer (type)", "Output Shape", "Param #"})
+	table.SetCenterSeparator("|")
+	table.AppendBulk(data)
+	table.Render()
+}
+
 // initializing the model parameters
 func initializeParameters(nnStructure []int) map[string]*mat.Dense {
 	parameters := make(map[string]*mat.Dense) // map containing the parameters
@@ -190,55 +281,4 @@ func initializeParameters(nnStructure []int) map[string]*mat.Dense {
 	}
 
 	return parameters
-}
-
-// forward propagation step
-func forwardPropagation(parameters map[string]*mat.Dense, x *mat.Dense,
-	activation activationFunction, outputActivation outputActivationFunction) (*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense) {
-	L := len(parameters) / 2         // number of layers
-	Z := make(map[string]*mat.Dense) // linear function
-	A := make(map[string]*mat.Dense) // activation function
-	A[strconv.Itoa(0)] = x
-
-	applyActivationFunction := func(_, _ int, v float64) float64 { return activation(v) }
-	for l := 0; l < L-1; l++ {
-		W := parameters["W"+strconv.Itoa(l+1)] // weights W
-		b := parameters["b"+strconv.Itoa(l+1)] // biases b
-
-		Z[strconv.Itoa(l+1)] = ngo.AddMatrixVector(ngo.MatMul(W, A[strconv.Itoa(l)]), b) // compute the linear operation
-		A[strconv.Itoa(l+1)] = ngo.Apply(applyActivationFunction, Z[strconv.Itoa(l+1)])  // compute the non linear operation
-	}
-	// for output layer
-	Z[strconv.Itoa(L)] = ngo.AddMatrixVector(ngo.MatMul(parameters["W"+strconv.Itoa(L)], A[strconv.Itoa(L-1)]), parameters["b"+strconv.Itoa(L)])
-	A[strconv.Itoa(L)] = outputActivation(Z[strconv.Itoa(L)])
-
-	// prediction
-	yHat := A[strconv.Itoa(L)]
-
-	return yHat, Z, A
-}
-
-// backward propagation step
-func backwardPropagation(parameters, Z, A map[string]*mat.Dense, y *mat.Dense, derivative activationFunction, lambd float64) (map[string]*mat.Dense, map[string]*mat.Dense) {
-	m := y.RawMatrix().Cols  // number of training examples
-	L := len(parameters) / 2 // number of layers
-
-	dZ := make(map[string]*mat.Dense) // derivatives of the linear function Z
-	dW := make(map[string]*mat.Dense) // derivatives of the weigths W
-	db := make(map[string]*mat.Dense) // derivatives of the biases b
-	dA := make(map[string]*mat.Dense) // derivatives of the activation function A
-
-	dZ[strconv.Itoa(L)] = ngo.Scale(1./float64(m), ngo.Sub(A[strconv.Itoa(L)], y))
-	dW[strconv.Itoa(L)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(L)], A[strconv.Itoa(L-1)].T()), ngo.Scale(lambd/float64(m), parameters["W"+strconv.Itoa(L)]))
-	db[strconv.Itoa(L)] = ngo.Sum(dZ[strconv.Itoa(L)], ngo.OverColumns)
-
-	applyActivationFunctionDerivative := func(_, _ int, v float64) float64 { return derivative(v) }
-	for l := L - 1; l > 0; l-- {
-		dA[strconv.Itoa(l)] = ngo.MatMul(parameters["W"+strconv.Itoa(l+1)].T(), dZ[strconv.Itoa(l+1)])
-		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], ngo.Apply(applyActivationFunctionDerivative, Z[strconv.Itoa(l)]))
-		dW[strconv.Itoa(l)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(l)], A[strconv.Itoa(l-1)].T()), ngo.Scale(lambd/float64(m), parameters["W"+strconv.Itoa(l)]))
-		db[strconv.Itoa(l)] = ngo.Sum(dZ[strconv.Itoa(l)], ngo.OverColumns)
-	}
-
-	return dW, db
 }
