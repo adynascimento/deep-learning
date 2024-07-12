@@ -3,6 +3,7 @@ package ngo
 import (
 	"math/rand"
 
+	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"
 )
 
@@ -125,6 +126,16 @@ func ZeroPadding(a *mat.Dense, n int) *mat.Dense {
 	}
 
 	return padded
+}
+
+// finds the indices of the maximum value in a matrix
+func MaxIndices(a *mat.Dense) (int, int) {
+	maxIndex := floats.MaxIdx(a.RawMatrix().Data)
+
+	maxIdx := maxIndex / a.RawMatrix().Cols
+	maxJdx := maxIndex % a.RawMatrix().Cols
+
+	return maxIdx, maxJdx
 }
 
 // applies the function fn to each of the elements of a. The function fn takes a row/column

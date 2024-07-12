@@ -3,7 +3,7 @@ module github.com/adynascimento/deep-learning
 go 1.22
 
 require (
-	github.com/adynascimento/plot v1.2.0
+	github.com/adynascimento/plot v1.3.2
 	github.com/c-bata/goptuna v0.9.0
 	github.com/olekukonko/tablewriter v0.0.5
 	gonum.org/v1/gonum v0.14.0

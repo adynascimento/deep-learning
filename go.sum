@@ -1,8 +1,8 @@
 git.sr.ht/~sbinet/gg v0.3.1 h1:LNhjNn8DerC8f9DHLz6lS0YYul/b602DUxDgGkd/Aik=
 git.sr.ht/~sbinet/gg v0.3.1/go.mod h1:KGYtlADtqsqANL9ueOFkWymvzUvLMQllU5Ixo+8v3pc=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
-github.com/adynascimento/plot v1.2.0 h1:VNGb2NAznTRUkL7Ki9gnVpA1T3FnU2ftyIWT/CR+6B8=
-github.com/adynascimento/plot v1.2.0/go.mod h1:mYPG1csr4TYtjmL6HdIe3/AgNYmyKJfEHJAmw0zo5A4=
+github.com/adynascimento/plot v1.3.2 h1:nk9wfCqfI0xWTjY8v/7ACoEsJm81tNHtVBe4Un1GeIA=
+github.com/adynascimento/plot v1.3.2/go.mod h1:mYPG1csr4TYtjmL6HdIe3/AgNYmyKJfEHJAmw0zo5A4=
 github.com/ajstarks/deck v0.0.0-20200831202436-30c9fc6549a9/go.mod h1:JynElWSGnm/4RlzPXRlREEwqTHAN3T56Bv2ITsFT3gY=
 github.com/ajstarks/deck/generate v0.0.0-20210309230005-c3f852c02e19/go.mod h1:T13YZdzov6OU0A1+RfKZiZN9ca6VeKdBdyDV+BY97Tk=
 github.com/ajstarks/svgo v0.0.0-20211024235047-1546f124cd8b h1:slYM766cy2nI3BwyRiyQj/Ud48djTMtMebDqepE95rw=

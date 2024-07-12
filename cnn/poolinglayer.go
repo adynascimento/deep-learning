@@ -49,13 +49,15 @@ func (pl *poolLayer) ForwardPropagation(x [][]*mat.Dense) [][]*mat.Dense {
 
 	for t := 0; t < nTraining; t++ {
 		for f := 0; f < nFilters; f++ {
+			xValue := x[t][f].RawMatrix()
 			for i := 0; i < hOut; i++ {
 				for j := 0; j < wOut; j++ {
 					max := -math.MaxFloat64
 					for k := 0; k < size; k++ {
 						for l := 0; l < size; l++ {
-							if x[t][f].At(i*stride+k, j*stride+l) > max {
-								max = x[t][f].At(i*stride+k, j*stride+l)
+							index := (i*stride+k)*xValue.Cols + (j*stride + l)
+							if xValue.Data[index] > max {
+								max = xValue.Data[index]
 							}
 						}
 					}
@@ -93,19 +95,22 @@ func (pl *poolLayer) BackwardPropagation(x [][]*mat.Dense, dA [][]*mat.Dense) []
 
 	for t := 0; t < nTraining; t++ {
 		for f := 0; f < nFilters; f++ {
+			xValue := x[t][f].RawMatrix()
+			dAValue := dA[t][f].RawMatrix()
 			for i := 0; i < hOut; i++ {
 				for j := 0; j < wOut; j++ {
 					max := -math.MaxFloat64
 					maxIndex := [2]int{0, 0}
 					for k := 0; k < size; k++ {
 						for l := 0; l < size; l++ {
-							if x[t][f].At(i*stride+k, j*stride+l) > max {
-								max = x[t][f].At(i*stride+k, j*stride+l)
+							index := (i*stride+k)*xValue.Cols + (j*stride + l)
+							if xValue.Data[index] > max {
+								max = xValue.Data[index]
 								maxIndex = [2]int{i*stride + k, j*stride + l}
 							}
 						}
 					}
-					dxPrev[t][f].Set(maxIndex[0], maxIndex[1], dA[t][f].At(i, j))
+					dxPrev[t][f].Set(maxIndex[0], maxIndex[1], dAValue.Data[i*wOut+j])
 				}
 			}
 		}
