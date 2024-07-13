@@ -43,12 +43,11 @@ func main() {
 
 	// optimizer to train the model
 	model := neural.NewTrainer(cnn.TrainerConfig{
-		Optimizer:        cnn.AdamOptimizer, // optimizer
-		LearningRate:     0.001,             // learning rate
-		L2Regularization: 1.40e-06,          // l2 regularization
-		NIterations:      20,                // number of iterations
-		BatchSize:        32,                // batch size
-	})
+		Optimizer:    cnn.AdamOptimizer, // optimizer
+		LearningRate: 0.001,             // learning rate
+		NIterations:  20},               // number of iterations
+		cnn.WithBatchSize(32),
+		cnn.WithL2Regularization(1.40e-06))
 	model.Summary()
 	model.Fit(xTrain, yTrain, true)
 
@@ -56,6 +55,6 @@ func main() {
 	fmt.Printf("accuracy of training data: %.4f \n", model.Evaluate(xTrain, yTrain))
 	fmt.Printf("accuracy of testing data:  %.4f \n", model.Evaluate(xTest, yTest))
 
-	number, probability := PredictFromImage(model, "examples/dataset/mnist/numbers/4.png")
+	number, probability := PredictFromImage(model, "../dataset/mnist/numbers/4.png")
 	fmt.Printf("prediction of the model: number %d (%.1f%% probability)\n", number, probability)
 }

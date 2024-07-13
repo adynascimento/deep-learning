@@ -16,7 +16,7 @@ import (
 )
 
 type NeuralNetwork interface {
-	NewTrainer(config TrainerConfig) NeuralModel
+	NewTrainer(config TrainerConfig, options ...func(*neuralModel)) NeuralModel
 }
 
 type NeuralModel interface {
@@ -34,11 +34,9 @@ type NeuralConfig struct {
 }
 
 type TrainerConfig struct {
-	Optimizer        optimizerType
-	LearningRate     float64
-	L2Regularization float64
-	NIterations      int
-	BatchSize        int
+	Optimizer    optimizerType
+	LearningRate float64
+	NIterations  int
 }
 
 type neuralNetwork struct {
@@ -80,21 +78,26 @@ func NewNeuralNetwork(config NeuralConfig) NeuralNetwork {
 	}
 }
 
-func (nn *neuralNetwork) NewTrainer(config TrainerConfig) NeuralModel {
+func (nn *neuralNetwork) NewTrainer(config TrainerConfig, options ...func(*neuralModel)) NeuralModel {
 	// choice of optimization algorithm
 	optimizer := optimizerSettings[config.Optimizer]
 	if config.Optimizer == AdamOptimizer {
 		optimizer.Adam = initializeAdam(nn.Parameters)
 	}
 
-	return &neuralModel{
-		neuralNetwork:    nn,
-		Optimizer:        optimizer,
-		LearningRate:     config.LearningRate,
-		L2Regularization: config.L2Regularization,
-		NIterations:      config.NIterations,
-		BatchSize:        config.BatchSize,
+	model := neuralModel{
+		neuralNetwork: nn,
+		Optimizer:     optimizer,
+		LearningRate:  config.LearningRate,
+		NIterations:   config.NIterations,
 	}
+
+	// apply additional options
+	for _, option := range options {
+		option(&model)
+	}
+
+	return &model
 }
 
 // forward propagation step
@@ -155,13 +158,16 @@ func (nm *neuralModel) BackwardPropagation(Z, A map[string]*mat.Dense, y *mat.De
 // row is a variable and each column is an observation.
 // matrix shape (nFeatures, nSamples)
 func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, printLoss bool) []float64 {
+	nSamples := xTrain.RawMatrix().Cols
+	if nm.BatchSize == 0 {
+		nm.BatchSize = nSamples
+	}
+
 	// keep track of the loss
 	losses := []float64{}
 
-	start := time.Now()
-	_, nSamples := xTrain.Dims()
-
 	// loop
+	start := time.Now()
 	for i := 1; i <= nm.NIterations; i++ {
 		lossBatches := []float64{}
 
@@ -281,4 +287,16 @@ func initializeParameters(nnStructure []int) map[string]*mat.Dense {
 	}
 
 	return parameters
+}
+
+func WithBatchSize(batchSize int) func(*neuralModel) {
+	return func(nm *neuralModel) {
+		nm.BatchSize = batchSize
+	}
+}
+
+func WithL2Regularization(lambd float64) func(*neuralModel) {
+	return func(nm *neuralModel) {
+		nm.L2Regularization = lambd
+	}
 }

@@ -33,12 +33,11 @@ func main() {
 
 	// optimizer to train the model
 	model := neural.NewTrainer(network.TrainerConfig{
-		Optimizer:        network.AdamOptimizer, // optimizer
-		LearningRate:     0.0075,                // learning rate
-		L2Regularization: 1.40e-07,              // l2 regularization
-		NIterations:      200,                   // number of iterations
-		BatchSize:        32,                    // batch size
-	})
+		Optimizer:    network.AdamOptimizer, // optimizer
+		LearningRate: 0.0075,                // learning rate
+		NIterations:  400},                  // number of iterations
+		network.WithBatchSize(32),
+		network.WithL2Regularization(1.40e-06))
 	model.Summary()
 	model.Fit(xTrain, yTrain, true)
 

@@ -17,17 +17,17 @@ func crossEntropy(y_hat, y *mat.Dense, parameters map[string]*mat.Dense, lambd f
 
 	epsilon := 1e-07
 	applyLog := func(_, _ int, v float64) float64 { return math.Log(v + epsilon) }
-	loss := mat.Sum(ngo.Multiply(y, ngo.Apply(applyLog, y_hat)))
+	loss := (-1.0 / (float64(m))) * mat.Sum(ngo.Multiply(y, ngo.Apply(applyLog, y_hat)))
 
 	// l2 regularization loss
 	L := len(parameters) / 2 // number of layers
 	var sum float64
 	for l := 0; l < L; l++ {
-		sum = sum + mat.Sum(ngo.Square(parameters["W"+strconv.Itoa(l+1)]))
+		sum += mat.Sum(ngo.Square(parameters["W"+strconv.Itoa(l+1)]))
 	}
-	loss = loss + 0.5*lambd*sum
+	loss += (0.5 / (float64(m))) * lambd * sum
 
-	return -(1.0 / (float64(m)) * loss)
+	return loss
 }
 
 // computing the binary cross entropy loss function
@@ -41,15 +41,15 @@ func binaryCrossEntropy(y_hat, y *mat.Dense, parameters map[string]*mat.Dense, l
 
 	term1 := ngo.Multiply(y, ngo.Apply(applyLog, y_hat))
 	term2 := ngo.Multiply(ngo.Apply(applyOneMinus, y), ngo.Apply(applyOneMinusLog, y_hat))
-	loss := mat.Sum(ngo.Add(term1, term2))
+	loss := (-1.0 / (float64(m))) * mat.Sum(ngo.Add(term1, term2))
 
 	// l2 regularization loss
 	L := len(parameters) / 2 // number of layers
 	var sum float64
 	for l := 0; l < L; l++ {
-		sum = sum + mat.Sum(ngo.Square(parameters["W"+strconv.Itoa(l+1)]))
+		sum += mat.Sum(ngo.Square(parameters["W"+strconv.Itoa(l+1)]))
 	}
-	loss = loss + 0.5*lambd*sum
+	loss += (0.5 / (float64(m))) * lambd * sum
 
-	return -(1.0 / (float64(m)) * loss)
+	return loss
 }

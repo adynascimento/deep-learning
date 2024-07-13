@@ -29,12 +29,10 @@ func main() {
 
 	// optimizer to train the model
 	model := neural.NewTrainer(network.TrainerConfig{
-		Optimizer:        network.AdamOptimizer, // optimizer
-		LearningRate:     0.001,                 // learning rate
-		L2Regularization: 1.40e-06,              // l2 regularization
-		NIterations:      10000,                 // number of iterations
-		BatchSize:        32,                    // batch size
-	})
+		Optimizer:    network.AdamOptimizer, // optimizer
+		LearningRate: 0.001,                 // learning rate
+		NIterations:  10000},                // number of iterations
+		network.WithL2Regularization(1.40e-06))
 	model.Fit(xTrain, yTrain, true)
 
 	// saves neural network model to file
@@ -61,5 +59,6 @@ func main() {
 	plt.YLim(-1.0, 1.0)
 	plt.Grid()
 
-	plt.Save("prediction.png")
+	// plt.Save("prediction.png")
+	plt.Show()
 }

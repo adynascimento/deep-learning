@@ -17,7 +17,7 @@ type CNN interface {
 	AddConv2DLayer(nFilters, filterSize, stride int)
 	AddMaxPooling2DLayer(size, stride int)
 	AddDenseLayer(nnStructure []int)
-	NewTrainer(config TrainerConfig) CNNModel
+	NewTrainer(config TrainerConfig, options ...func(*cnnModel)) CNNModel
 }
 
 type CNNModel interface {
@@ -36,11 +36,9 @@ type CNNConfig struct {
 }
 
 type TrainerConfig struct {
-	Optimizer        optimizerType
-	LearningRate     float64
-	L2Regularization float64
-	NIterations      int
-	BatchSize        int
+	Optimizer    optimizerType
+	LearningRate float64
+	NIterations  int
 }
 
 // input shape (nChannels, height, width)
@@ -121,7 +119,7 @@ func (c *cnn) AddDenseLayer(nnStructure []int) {
 	c.DenseLayerStructure = nnStructure
 }
 
-func (c *cnn) NewTrainer(config TrainerConfig) CNNModel {
+func (c *cnn) NewTrainer(config TrainerConfig, options ...func(*cnnModel)) CNNModel {
 	// add convolutional layer
 	for _, v := range c.ConvConfigs {
 		convLayer := newConvLayer(v.NFilters, v.FilterSize, v.Stride, c.Activation, config.Optimizer,
@@ -132,14 +130,19 @@ func (c *cnn) NewTrainer(config TrainerConfig) CNNModel {
 	// add fully connected layer
 	c.DenseLayer = newDenseLayer(c.DenseLayerStructure, c.Activation, c.OutputActivation, config.Optimizer)
 
-	return &cnnModel{
-		cnn:              c,
-		Optimizer:        config.Optimizer,
-		LearningRate:     config.LearningRate,
-		L2Regularization: config.L2Regularization,
-		NIterations:      config.NIterations,
-		BatchSize:        config.BatchSize,
+	model := cnnModel{
+		cnn:          c,
+		Optimizer:    config.Optimizer,
+		LearningRate: config.LearningRate,
+		NIterations:  config.NIterations,
 	}
+
+	// apply additional options
+	for _, option := range options {
+		option(&model)
+	}
+
+	return &model
 }
 
 // cnn forward propagation step
@@ -190,13 +193,16 @@ func (cm *cnnModel) BackwardPropagation(x [][]*mat.Dense, convOutputs map[string
 // row is a variable and each column is an observation.
 // yTrain matrix shape (nFeatures, nSamples)
 func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, printLoss bool) []float64 {
+	nSamples := len(xTrain)
+	if cm.BatchSize == 0 {
+		cm.BatchSize = nSamples
+	}
+
 	// keep track of the loss
 	losses := []float64{}
 
-	start := time.Now()
-	nSamples := len(xTrain)
-
 	// loop
+	start := time.Now()
 	for i := 1; i <= cm.NIterations; i++ {
 		lossBatches := []float64{}
 
@@ -306,4 +312,16 @@ func (cm *cnnModel) Summary() {
 	table.SetCenterSeparator("|")
 	table.AppendBulk(data)
 	table.Render()
+}
+
+func WithBatchSize(batchSize int) func(*cnnModel) {
+	return func(nm *cnnModel) {
+		nm.BatchSize = batchSize
+	}
+}
+
+func WithL2Regularization(lambd float64) func(*cnnModel) {
+	return func(nm *cnnModel) {
+		nm.L2Regularization = lambd
+	}
 }
