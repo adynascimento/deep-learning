@@ -16,7 +16,7 @@ type model struct {
 	OptimizerName    optimizerType        `json:"optimizer"`
 	LearningRate     float64              `json:"learning_rate"`
 	L2Regularization float64              `json:"l2_regularization"`
-	NIterations      int                  `json:"n_iterations"`
+	Epochs           int                  `json:"epochs"`
 	Parameters       map[string][]float64 `json:"parameters"`
 }
 
@@ -48,7 +48,7 @@ func toModel(network neuralModel) model {
 		OptimizerName:    network.Optimizer.Name,
 		LearningRate:     network.LearningRate,
 		L2Regularization: network.L2Regularization,
-		NIterations:      network.NIterations,
+		Epochs:           network.Epochs,
 		Parameters:       parameters,
 	}
 }

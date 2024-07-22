@@ -38,7 +38,7 @@ type CNNConfig struct {
 type TrainerConfig struct {
 	Optimizer    optimizerType
 	LearningRate float64
-	NIterations  int
+	Epochs       int
 }
 
 // input shape (nChannels, height, width)
@@ -61,7 +61,7 @@ type cnnModel struct {
 	Optimizer        optimizerType
 	LearningRate     float64
 	L2Regularization float64
-	NIterations      int
+	Epochs           int
 	BatchSize        int
 }
 
@@ -134,7 +134,7 @@ func (c *cnn) NewTrainer(config TrainerConfig, options ...func(*cnnModel)) CNNMo
 		cnn:          c,
 		Optimizer:    config.Optimizer,
 		LearningRate: config.LearningRate,
-		NIterations:  config.NIterations,
+		Epochs:       config.Epochs,
 	}
 
 	// apply additional options
@@ -172,7 +172,7 @@ func (cm *cnnModel) ForwardPropagation(x [][]*mat.Dense) (*mat.Dense, map[string
 }
 
 // cnn backward propagation step
-func (cm *cnnModel) BackwardPropagation(x [][]*mat.Dense, convOutputs map[string][][]*mat.Dense, Z, A map[string]*mat.Dense, yTrue *mat.Dense) {
+func (cm *cnnModel) BackwardPropagation(convOutputs map[string][][]*mat.Dense, Z, A map[string]*mat.Dense, yTrue *mat.Dense) {
 	// fully connected layer step
 	dOutDense := cm.DenseLayer.BackwardPropagation(Z, A, yTrue, cm.LearningRate, cm.L2Regularization)
 
@@ -203,8 +203,9 @@ func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, printLoss bool
 
 	// loop
 	start := time.Now()
-	for i := 1; i <= cm.NIterations; i++ {
+	for i := 1; i <= cm.Epochs; i++ {
 		lossBatches := []float64{}
+		weights := []float64{}
 
 		for startIdx := 0; startIdx < nSamples; startIdx += cm.BatchSize {
 			endIdx := startIdx + cm.BatchSize
@@ -221,15 +222,16 @@ func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, printLoss bool
 			// loss function
 			loss := cm.LossFunction(yPred, yBatch, cm.DenseLayer.Parameters, cm.L2Regularization)
 			lossBatches = append(lossBatches, loss)
+			weights = append(weights, float64(len(xBatch)))
 
 			// backward propagation with update parameters (optimization algorithm)
-			cm.BackwardPropagation(xBatch, convOutputs, Z, A, yBatch)
+			cm.BackwardPropagation(convOutputs, Z, A, yBatch)
 		}
 
 		// print the loss every x iterations
-		meanLoss := stat.Mean(lossBatches, nil)
-		if printLoss && i%(cm.NIterations/10) == 0 || printLoss && i == 1 {
-			fmt.Printf("iter %6d/%d: | t: %8.2fs | loss: %.6e | acc: %.4f \n", i, cm.NIterations,
+		meanLoss := stat.Mean(lossBatches, weights)
+		if printLoss && i%(cm.Epochs/10) == 0 || printLoss && i == 1 {
+			fmt.Printf("iter %6d/%d: | t: %8.2fs | loss: %.6e | acc: %.4f \n", i, cm.Epochs,
 				time.Since(start).Seconds(), meanLoss, cm.Evaluate(xTrain, yTrain))
 		}
 		losses = append(losses, meanLoss)

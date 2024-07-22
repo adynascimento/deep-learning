@@ -36,7 +36,7 @@ type NeuralConfig struct {
 type TrainerConfig struct {
 	Optimizer    optimizerType
 	LearningRate float64
-	NIterations  int
+	Epochs       int
 }
 
 type neuralNetwork struct {
@@ -53,7 +53,7 @@ type neuralModel struct {
 	Optimizer        optimizer
 	LearningRate     float64
 	L2Regularization float64
-	NIterations      int
+	Epochs           int
 	BatchSize        int
 }
 
@@ -89,7 +89,7 @@ func (nn *neuralNetwork) NewTrainer(config TrainerConfig, options ...func(*neura
 		neuralNetwork: nn,
 		Optimizer:     optimizer,
 		LearningRate:  config.LearningRate,
-		NIterations:   config.NIterations,
+		Epochs:        config.Epochs,
 	}
 
 	// apply additional options
@@ -168,7 +168,7 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, printLoss bool) []float64 
 
 	// loop
 	start := time.Now()
-	for i := 1; i <= nm.NIterations; i++ {
+	for i := 1; i <= nm.Epochs; i++ {
 		lossBatches := []float64{}
 
 		for startIdx := 0; startIdx < nSamples; startIdx += nm.BatchSize {
@@ -197,11 +197,11 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, printLoss bool) []float64 
 
 		// print the loss every x iterations
 		meanLoss := stat.Mean(lossBatches, nil)
-		if printLoss && i%(nm.NIterations/10) == 0 || printLoss && i == 1 {
+		if printLoss && i%(nm.Epochs/10) == 0 || printLoss && i == 1 {
 			if nm.Mode == ModeRegression {
-				fmt.Printf("iter %6d/%d: | t: %5.2fs | loss: %.6e \n", i, nm.NIterations, time.Since(start).Seconds(), meanLoss)
+				fmt.Printf("iter %6d/%d: | t: %5.2fs | loss: %.6e \n", i, nm.Epochs, time.Since(start).Seconds(), meanLoss)
 			} else {
-				fmt.Printf("iter %6d/%d: | t: %5.2fs | loss: %.6e | acc: %.4f \n", i, nm.NIterations,
+				fmt.Printf("iter %6d/%d: | t: %5.2fs | loss: %.6e | acc: %.4f \n", i, nm.Epochs,
 					time.Since(start).Seconds(), meanLoss, nm.Evaluate(xTrain, yTrain))
 			}
 		}

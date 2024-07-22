@@ -59,7 +59,7 @@ func newConvLayer(nFilters, filterSize, stride int, activation activation, optTy
 		TrainableParams: nFilters * (filterSize*filterSize*nChannels + 1),
 		Parameters: parameters{
 			W: filters,
-			B: ngo.Randn(nFilters, 1),
+			B: mat.NewDense(nFilters, 1, nil),
 		},
 		Activation: activation,
 		Optimizer:  optimizer,
