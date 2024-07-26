@@ -35,9 +35,9 @@ func main() {
 		Activation: cnn.ReLUActivation,
 		Mode:       cnn.ModeMultiClass,
 	})
-	neural.AddConv2DLayer(32, 3, 1)
+	neural.AddConv2DLayer(16, 3, 1)
 	neural.AddMaxPooling2DLayer(2, 2)
-	neural.AddConv2DLayer(64, 3, 1)
+	neural.AddConv2DLayer(32, 3, 1)
 	neural.AddMaxPooling2DLayer(2, 2)
 	neural.AddDenseLayer([]int{128, yTrain.RawMatrix().Rows})
 

@@ -6,6 +6,7 @@ require (
 	github.com/adynascimento/plot v1.4.0
 	github.com/c-bata/goptuna v0.9.0
 	github.com/olekukonko/tablewriter v0.0.5
+	github.com/schollz/progressbar/v3 v3.14.4
 	gonum.org/v1/gonum v0.14.0
 )
 
@@ -21,9 +22,11 @@ require (
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/mazznoer/colorgrad v0.8.1 // indirect
 	github.com/mazznoer/csscolorparser v0.1.0 // indirect
+	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	golang.org/x/image v0.14.0 // indirect
 	golang.org/x/sys v0.20.0 // indirect
+	golang.org/x/term v0.20.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	gonum.org/v1/plot v0.11.0 // indirect
 )
