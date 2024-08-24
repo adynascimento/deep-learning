@@ -15,7 +15,7 @@ type model struct {
 	Optimizer          optimizerType
 	LearningRate       float64
 	L2Regularization   float64
-	NIterations        int
+	Epochs             int
 	BatchSize          int
 	ConvLayers         []saveConvLayer
 	PoolLayers         []*poolLayer
@@ -94,7 +94,7 @@ func toModel(cm cnnModel) model {
 		Optimizer:          cm.Optimizer,
 		LearningRate:       cm.LearningRate,
 		L2Regularization:   cm.L2Regularization,
-		NIterations:        cm.NIterations,
+		Epochs:             cm.Epochs,
 		BatchSize:          cm.BatchSize,
 		ConvLayers:         convLayers,
 		PoolLayers:         cm.PoolLayers,

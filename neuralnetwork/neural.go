@@ -9,6 +9,7 @@ import (
 
 	"github.com/adynascimento/deep-learning/ngo"
 	"github.com/olekukonko/tablewriter"
+	"github.com/schollz/progressbar/v3"
 
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"
@@ -20,7 +21,7 @@ type NeuralNetwork interface {
 }
 
 type NeuralModel interface {
-	Fit(xTrain *mat.Dense, yTrain *mat.Dense, printLoss bool) []float64
+	Fit(xTrain *mat.Dense, yTrain *mat.Dense, verbose bool) []float64
 	Predict(x *mat.Dense) *mat.Dense
 	Evaluate(x *mat.Dense, y *mat.Dense) float64
 	Save(path string)
@@ -36,7 +37,7 @@ type NeuralConfig struct {
 type TrainerConfig struct {
 	Optimizer    optimizerType
 	LearningRate float64
-	NIterations  int
+	Epochs       int
 }
 
 type neuralNetwork struct {
@@ -53,7 +54,7 @@ type neuralModel struct {
 	Optimizer        optimizer
 	LearningRate     float64
 	L2Regularization float64
-	NIterations      int
+	Epochs           int
 	BatchSize        int
 }
 
@@ -89,7 +90,7 @@ func (nn *neuralNetwork) NewTrainer(config TrainerConfig, options ...func(*neura
 		neuralNetwork: nn,
 		Optimizer:     optimizer,
 		LearningRate:  config.LearningRate,
-		NIterations:   config.NIterations,
+		Epochs:        config.Epochs,
 	}
 
 	// apply additional options
@@ -157,7 +158,7 @@ func (nm *neuralModel) BackwardPropagation(Z, A map[string]*mat.Dense, y *mat.De
 // which is represented as an rows X cols matrix a where each
 // row is a variable and each column is an observation.
 // matrix shape (nFeatures, nSamples)
-func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, printLoss bool) []float64 {
+func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, verbose bool) []float64 {
 	nSamples := xTrain.RawMatrix().Cols
 	if nm.BatchSize == 0 {
 		nm.BatchSize = nSamples
@@ -168,10 +169,13 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, printLoss bool) []float64 
 
 	// loop
 	start := time.Now()
-	for i := 1; i <= nm.NIterations; i++ {
+	iterPerEpoch := int(math.Ceil(float64(nSamples) / float64(nm.BatchSize)))
+	for i := 1; i <= nm.Epochs; i++ {
 		lossBatches := []float64{}
 
+		bar := progressBar(iterPerEpoch, fmt.Sprintf("epoch %5d/%d: ", i, nm.Epochs))
 		for startIdx := 0; startIdx < nSamples; startIdx += nm.BatchSize {
+			bar.Add(1)
 			endIdx := startIdx + nm.BatchSize
 			if endIdx > nSamples {
 				endIdx = nSamples
@@ -197,11 +201,11 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, printLoss bool) []float64 
 
 		// print the loss every x iterations
 		meanLoss := stat.Mean(lossBatches, nil)
-		if printLoss && i%(nm.NIterations/10) == 0 || printLoss && i == 1 {
+		if verbose && i%(nm.Epochs/10) == 0 || verbose && i == 1 {
 			if nm.Mode == ModeRegression {
-				fmt.Printf("iter %6d/%d: | t: %5.2fs | loss: %.6e \n", i, nm.NIterations, time.Since(start).Seconds(), meanLoss)
+				fmt.Printf(" | t: %7.2fs | loss: %.6e \n", time.Since(start).Seconds(), meanLoss)
 			} else {
-				fmt.Printf("iter %6d/%d: | t: %5.2fs | loss: %.6e | acc: %.4f \n", i, nm.NIterations,
+				fmt.Printf(" | t: %7.2fs | loss: %.6e | acc: %.4f \n",
 					time.Since(start).Seconds(), meanLoss, nm.Evaluate(xTrain, yTrain))
 			}
 		}
@@ -287,6 +291,21 @@ func initializeParameters(nnStructure []int) map[string]*mat.Dense {
 	}
 
 	return parameters
+}
+
+// progress bar
+func progressBar(iter int, description string) *progressbar.ProgressBar {
+	return progressbar.NewOptions(iter,
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionSetWidth(20),
+		progressbar.OptionShowCount(),
+		progressbar.OptionShowElapsedTimeOnFinish(),
+		progressbar.OptionSetDescription(description),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "[green]━[reset]",
+			SaucerPadding: " ",
+		}),
+	)
 }
 
 func WithBatchSize(batchSize int) func(*neuralModel) {

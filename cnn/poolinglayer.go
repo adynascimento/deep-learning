@@ -27,8 +27,8 @@ func newPoolLayer(size, stride int, inputShape [3]int) *poolLayer {
 }
 
 // forward propagation step: pooling operation
-// input x (conv output) with shape (nTraining, nFilters, hIn, wIn)
-func (pl *poolLayer) ForwardPropagation(x [][]*mat.Dense) [][]*mat.Dense {
+// input x (conv output) with shape (nFilters, hIn, wIn)
+func (pl *poolLayer) ForwardPropagation(x []*mat.Dense) []*mat.Dense {
 	size := pl.Size
 	stride := pl.Stride
 
@@ -36,33 +36,27 @@ func (pl *poolLayer) ForwardPropagation(x [][]*mat.Dense) [][]*mat.Dense {
 	hOut := pl.OutputShape[1]
 	wOut := pl.OutputShape[2]
 
-	// pool output with shape (nTraining, nFilters, hOut, wOut)
-	nTraining := len(x)
-	nFilters := len(x[0])
-	A := make([][]*mat.Dense, nTraining) // output of the pool layer
+	// pool output with shape (nFilters, hOut, wOut)
+	nFilters := len(x)
+	A := make([]*mat.Dense, nFilters) // output of the pool layer
 	for i := range A {
-		A[i] = make([]*mat.Dense, nFilters)
-		for j := range A[i] {
-			A[i][j] = mat.NewDense(hOut, wOut, nil)
-		}
+		A[i] = mat.NewDense(hOut, wOut, nil)
 	}
 
-	for t := 0; t < nTraining; t++ {
-		for f := 0; f < nFilters; f++ {
-			xValue := x[t][f].RawMatrix()
-			for i := 0; i < hOut; i++ {
-				for j := 0; j < wOut; j++ {
-					max := -math.MaxFloat64
-					for k := 0; k < size; k++ {
-						for l := 0; l < size; l++ {
-							index := (i*stride+k)*xValue.Cols + (j*stride + l)
-							if xValue.Data[index] > max {
-								max = xValue.Data[index]
-							}
+	for f := 0; f < nFilters; f++ {
+		xValue := x[f].RawMatrix()
+		for i := 0; i < hOut; i++ {
+			for j := 0; j < wOut; j++ {
+				max := -math.MaxFloat64
+				for k := 0; k < size; k++ {
+					for l := 0; l < size; l++ {
+						index := (i*stride+k)*xValue.Cols + (j*stride + l)
+						if xValue.Data[index] > max {
+							max = xValue.Data[index]
 						}
 					}
-					A[t][f].Set(i, j, max)
 				}
+				A[f].Set(i, j, max)
 			}
 		}
 	}
@@ -71,9 +65,9 @@ func (pl *poolLayer) ForwardPropagation(x [][]*mat.Dense) [][]*mat.Dense {
 }
 
 // backward propagation step: pooling operation
-// input x (conv output) with shape (nTraining, nFilters, hIn, wIn)
-// gradient dA with shape (nTraining, nFilters, hOut, wOut)
-func (pl *poolLayer) BackwardPropagation(x [][]*mat.Dense, dA [][]*mat.Dense) [][]*mat.Dense {
+// input x (conv output) with shape (nFilters, hIn, wIn)
+// gradient dA with shape (nFilters, hOut, wOut)
+func (pl *poolLayer) BackwardPropagation(x []*mat.Dense, dA []*mat.Dense) []*mat.Dense {
 	size := pl.Size
 	stride := pl.Stride
 
@@ -82,36 +76,30 @@ func (pl *poolLayer) BackwardPropagation(x [][]*mat.Dense, dA [][]*mat.Dense) []
 	wOut := pl.OutputShape[2]
 
 	// initialize gradient for input x
-	// input dxPrev with shape (nTraining, nFilters, hIn, wIn)
-	nTraining := len(x)
-	nFilters := len(x[0])
-	dxPrev := make([][]*mat.Dense, nTraining)
+	// input dxPrev with shape (nFilters, hIn, wIn)
+	nFilters := len(x)
+	dxPrev := make([]*mat.Dense, nFilters)
 	for i := range dxPrev {
-		dxPrev[i] = make([]*mat.Dense, nFilters)
-		for j := range dxPrev[i] {
-			dxPrev[i][j] = mat.NewDense(pl.InputShape[1], pl.InputShape[2], nil)
-		}
+		dxPrev[i] = mat.NewDense(pl.InputShape[1], pl.InputShape[2], nil)
 	}
 
-	for t := 0; t < nTraining; t++ {
-		for f := 0; f < nFilters; f++ {
-			xValue := x[t][f].RawMatrix()
-			dAValue := dA[t][f].RawMatrix()
-			for i := 0; i < hOut; i++ {
-				for j := 0; j < wOut; j++ {
-					max := -math.MaxFloat64
-					maxIndex := [2]int{0, 0}
-					for k := 0; k < size; k++ {
-						for l := 0; l < size; l++ {
-							index := (i*stride+k)*xValue.Cols + (j*stride + l)
-							if xValue.Data[index] > max {
-								max = xValue.Data[index]
-								maxIndex = [2]int{i*stride + k, j*stride + l}
-							}
+	for f := 0; f < nFilters; f++ {
+		xValue := x[f].RawMatrix()
+		dAValue := dA[f].RawMatrix()
+		for i := 0; i < hOut; i++ {
+			for j := 0; j < wOut; j++ {
+				max := -math.MaxFloat64
+				maxIndex := [2]int{0, 0}
+				for k := 0; k < size; k++ {
+					for l := 0; l < size; l++ {
+						index := (i*stride+k)*xValue.Cols + (j*stride + l)
+						if xValue.Data[index] > max {
+							max = xValue.Data[index]
+							maxIndex = [2]int{i*stride + k, j*stride + l}
 						}
 					}
-					dxPrev[t][f].Set(maxIndex[0], maxIndex[1], dAValue.Data[i*wOut+j])
 				}
+				dxPrev[f].Set(maxIndex[0], maxIndex[1], dAValue.Data[i*wOut+j])
 			}
 		}
 	}

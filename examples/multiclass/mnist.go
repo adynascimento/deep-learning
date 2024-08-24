@@ -35,7 +35,7 @@ func main() {
 	model := neural.NewTrainer(network.TrainerConfig{
 		Optimizer:    network.AdamOptimizer, // optimizer
 		LearningRate: 0.0075,                // learning rate
-		NIterations:  400},                  // number of iterations
+		Epochs:       100},                  // number of iterations
 		network.WithBatchSize(32),
 		network.WithL2Regularization(1.40e-06))
 	model.Summary()

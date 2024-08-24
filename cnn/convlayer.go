@@ -13,6 +13,7 @@ type convLayer struct {
 	TrainableParams int
 	Parameters      parameters
 	Activation      activation
+	Gradients       gradients
 	Optimizer       convOptimizer
 	NFilters        int
 	FilterSize      int
@@ -23,6 +24,11 @@ type convLayer struct {
 type parameters struct {
 	W [][]*mat.Dense // weights with shape (nFilters, nChannels, filterSize, filterSize)
 	B *mat.Dense     // biases with shape (nFilters, 1)
+}
+
+type gradients struct {
+	DW [][]*mat.Dense // weights with shape (nFilters, nChannels, filterSize, filterSize)
+	DB *mat.Dense     // biases with shape (nFilters, 1)
 }
 
 type convConfig struct {
@@ -47,6 +53,15 @@ func newConvLayer(nFilters, filterSize, stride int, activation activation, optTy
 		}
 	}
 
+	// initialize gradients
+	dW := make([][]*mat.Dense, nFilters) // derivatives of the weigths W
+	for f := 0; f < nFilters; f++ {
+		dW[f] = make([]*mat.Dense, nChannels)
+		for c := 0; c < nChannels; c++ {
+			dW[f][c] = mat.NewDense(filterSize, filterSize, nil)
+		}
+	}
+
 	// choice of optimization algorithm
 	optimizer := convOptimizerSettings[optType]
 	if optType == AdamOptimizer {
@@ -59,9 +74,13 @@ func newConvLayer(nFilters, filterSize, stride int, activation activation, optTy
 		TrainableParams: nFilters * (filterSize*filterSize*nChannels + 1),
 		Parameters: parameters{
 			W: filters,
-			B: ngo.Randn(nFilters, 1),
+			B: mat.NewDense(nFilters, 1, nil),
 		},
 		Activation: activation,
+		Gradients: gradients{
+			DW: dW,
+			DB: mat.NewDense(nFilters, 1, nil),
+		},
 		Optimizer:  optimizer,
 		NFilters:   nFilters,
 		FilterSize: filterSize,
@@ -71,8 +90,8 @@ func newConvLayer(nFilters, filterSize, stride int, activation activation, optTy
 }
 
 // forward propagation step: convolution operation
-// input x with shape (nTraining, nChannels, hIn, wIn)
-func (cl *convLayer) ForwardPropagation(x [][]*mat.Dense) ([][]*mat.Dense, [][]*mat.Dense) {
+// input x with shape (nChannels, hIn, wIn)
+func (cl *convLayer) ForwardPropagation(x []*mat.Dense) ([]*mat.Dense, []*mat.Dense) {
 	stride := cl.Stride
 	W := cl.Parameters.W
 	b := cl.Parameters.B
@@ -84,43 +103,37 @@ func (cl *convLayer) ForwardPropagation(x [][]*mat.Dense) ([][]*mat.Dense, [][]*
 	hOut := cl.OutputShape[1]
 	wOut := cl.OutputShape[2]
 
-	// conv output with shape (nTraining, nFilters, hOut, wOut)
-	nTraining := len(x)
-	Z := make([][]*mat.Dense, nTraining) // linear function
-	A := make([][]*mat.Dense, nTraining) // activation function
+	// conv output with shape (nFilters, hOut, wOut)
+	Z := make([]*mat.Dense, nFilters) // linear function
+	A := make([]*mat.Dense, nFilters) // activation function
 	for i := range Z {
-		Z[i] = make([]*mat.Dense, nFilters)
-		A[i] = make([]*mat.Dense, nFilters)
-		for j := range Z[i] {
-			Z[i][j] = mat.NewDense(hOut, wOut, nil)
-			A[i][j] = mat.NewDense(hOut, wOut, nil)
-		}
+		Z[i] = mat.NewDense(hOut, wOut, nil)
+		A[i] = mat.NewDense(hOut, wOut, nil)
 	}
 
 	var wg sync.WaitGroup
 	workers := make(chan struct{}, 8)
 
 	applyActivationFunction := func(_, _ int, v float64) float64 { return cl.Activation.Function(v) }
-	for t := 0; t < nTraining; t++ {
+	for f := 0; f < nFilters; f++ {
 		wg.Add(1)
 		workers <- struct{}{}
-		go func(t int) {
+		go func(f int) {
 			defer wg.Done()
 			defer func() { <-workers }()
 
-			for f := 0; f < nFilters; f++ {
-				convolve := mat.NewDense(hOut, wOut, nil)
-				for c := 0; c < nChannels; c++ {
-					convolve = ngo.Add(convolve, Convolve2D(x[t][c], W[f][c], stride))
-				}
-
-				applyBias := func(_, _ int, v float64) float64 { return v + b.At(f, 0) }
-				convolve = ngo.Apply(applyBias, convolve)
-
-				Z[t][f] = convolve
-				A[t][f] = ngo.Apply(applyActivationFunction, convolve)
+			convolve := mat.NewDense(hOut, wOut, nil)
+			for c := 0; c < nChannels; c++ {
+				convolve = ngo.Add(convolve, Convolve2D(x[c], W[f][c], stride))
 			}
-		}(t)
+
+			applyBias := func(_, _ int, v float64) float64 { return v + b.At(f, 0) }
+			convolve = ngo.Apply(applyBias, convolve)
+
+			Z[f] = convolve
+			A[f] = ngo.Apply(applyActivationFunction, convolve)
+
+		}(f)
 	}
 	wg.Wait()
 
@@ -128,9 +141,9 @@ func (cl *convLayer) ForwardPropagation(x [][]*mat.Dense) ([][]*mat.Dense, [][]*
 }
 
 // backward propagation step: reverse convolution operation
-// input x with shape (nTraining, nChannels, hIn, wIn)
-// gradient dA with shape (nTraining, nFilters, hOut, wOut)
-func (cl *convLayer) BackwardPropagation(x [][]*mat.Dense, Z, dA [][]*mat.Dense, learningRate float64) [][]*mat.Dense {
+// input x with shape (nChannels, hIn, wIn)
+// gradient dA with shape (nFilters, hOut, wOut)
+func (cl *convLayer) BackwardPropagation(x []*mat.Dense, Z, dA []*mat.Dense) []*mat.Dense {
 	stride := cl.Stride
 	W := cl.Parameters.W
 
@@ -138,70 +151,66 @@ func (cl *convLayer) BackwardPropagation(x [][]*mat.Dense, Z, dA [][]*mat.Dense,
 	nChannels := len(W[0])
 	filterSize, _ := W[0][0].Dims()
 
-	// initialize gradients
-	dW := make([][]*mat.Dense, nFilters) // derivatives of the weigths W
-	db := mat.NewDense(nFilters, 1, nil) // derivatives of the biases b
-	for f := 0; f < nFilters; f++ {
-		dW[f] = make([]*mat.Dense, nChannels)
-		for c := 0; c < nChannels; c++ {
-			dW[f][c] = mat.NewDense(filterSize, filterSize, nil)
-		}
-	}
-
 	// initialize gradient for input x
-	// input dxPrev with shape (nTraining, nChannels, hIn, wIn)
-	nTraining := len(x)
-	dxPrev := make([][]*mat.Dense, nTraining)
+	// input dxPrev with shape (nChannels, hIn, wIn)
+	dxPrev := make([]*mat.Dense, nChannels)
 	for i := range dxPrev {
-		dxPrev[i] = make([]*mat.Dense, nChannels)
-		for j := range dxPrev[i] {
-			dxPrev[i][j] = mat.NewDense(cl.InputShape[1], cl.InputShape[2], nil)
-		}
+		dxPrev[i] = mat.NewDense(cl.InputShape[1], cl.InputShape[2], nil)
 	}
 
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	workers := make(chan struct{}, 15)
+	workers := make(chan struct{}, 16)
 
 	applyActivationDerivative := func(_, _ int, v float64) float64 { return cl.Activation.Derivative(v) }
-	for t := 0; t < nTraining; t++ {
+	for f := 0; f < nFilters; f++ {
 		wg.Add(1)
 		workers <- struct{}{}
-		go func(t int) {
+		go func(f int) {
 			defer wg.Done()
 			defer func() { <-workers }()
 
-			for f := 0; f < nFilters; f++ {
-				// apply gradient of activation function to dA
-				dZ := ngo.Multiply(dA[t][f], ngo.Apply(applyActivationDerivative, Z[t][f]))
-				for c := 0; c < nChannels; c++ {
-					// gradient of Z with respect to W
-					convolve := Convolve2D(x[t][c], dZ, stride)
-					mu.Lock()
-					dW[f][c] = ngo.Add(dW[f][c], convolve)
-					mu.Unlock()
-
-					// gradient of Z with respect to x
-					convolve = Convolve2D(
-						ngo.ZeroPadding(dZ, filterSize-1),
-						ngo.Rotate180(W[f][c]),
-						stride)
-					mu.Lock()
-					dxPrev[t][c] = ngo.Add(dxPrev[t][c], convolve)
-					mu.Unlock()
-				}
-
+			// apply gradient of activation function to dA
+			dZ := ngo.Multiply(dA[f], ngo.Apply(applyActivationDerivative, Z[f]))
+			for c := 0; c < nChannels; c++ {
+				// gradient of Z with respect to W
+				convolve := Convolve2D(x[c], dZ, stride)
 				mu.Lock()
-				db.Set(f, 0, db.At(f, 0)+mat.Sum(dZ))
+				cl.Gradients.DW[f][c] = ngo.Add(cl.Gradients.DW[f][c], convolve)
+				mu.Unlock()
+
+				// gradient of Z with respect to x
+				convolve = Convolve2D(
+					ngo.ZeroPadding(dZ, filterSize-1),
+					ngo.Rotate180(W[f][c]),
+					stride)
+				mu.Lock()
+				dxPrev[c] = ngo.Add(dxPrev[c], convolve)
 				mu.Unlock()
 			}
-		}(t)
+
+			mu.Lock()
+			cl.Gradients.DB.Set(f, 0, cl.Gradients.DB.At(f, 0)+mat.Sum(dZ))
+			mu.Unlock()
+		}(f)
 	}
 	wg.Wait()
 
-	// update parameters (optimization algorithm)
-	cl.Parameters = cl.Optimizer.Function(&cl.Optimizer, cl.Parameters, dW, db, learningRate, cl.Iter)
+	return dxPrev
+}
+
+// update parameters (optimization algorithm)
+func (cl *convLayer) UpdateParameters(learningRate float64) {
+	cl.Parameters = cl.Optimizer.Function(&cl.Optimizer, cl.Parameters, cl.Gradients.DW,
+		cl.Gradients.DB, learningRate, cl.Iter)
 	cl.Iter++
 
-	return dxPrev
+	// reset gradients
+	for i := range cl.Gradients.DW {
+		for j := range cl.Gradients.DW[i] {
+			rows, cols := cl.Gradients.DW[i][j].Dims()
+			cl.Gradients.DW[i][j] = mat.NewDense(rows, cols, nil)
+		}
+	}
+	cl.Gradients.DB = mat.NewDense(cl.NFilters, 1, nil)
 }

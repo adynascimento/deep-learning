@@ -100,7 +100,7 @@ func initializeParameters(nnStructure []int) map[string]*mat.Dense {
 	L := len(nnStructure) - 1                 // number of layers
 
 	for l := 0; l < L; l++ {
-		scalar := math.Sqrt((6.0 / float64(nnStructure[l]+nnStructure[l+1])))*0.01
+		scalar := math.Sqrt((6.0 / float64(nnStructure[l]+nnStructure[l+1])))*0.1
 
 		parameters["W"+strconv.Itoa(l+1)] = ngo.Scale(scalar, ngo.Randn(nnStructure[l+1], nnStructure[l]))
 		parameters["b"+strconv.Itoa(l+1)] = mat.NewDense(nnStructure[l+1], 1, nil)
