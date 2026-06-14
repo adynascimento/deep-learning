@@ -11,23 +11,23 @@ import (
 var activationSettings = map[activationType]activation{
 	TanhActivation: {
 		Name:       TanhActivation,
-		Function:   tanhActivation,
-		Derivative: tanhActivationDerivative,
+		Function:   tanh,
+		Derivative: tanhDerivative,
 	},
 	SigmoidActivation: {
 		Name:       SigmoidActivation,
-		Function:   sigmoidActivation,
-		Derivative: sigmoidActivationDerivative,
+		Function:   sigmoid,
+		Derivative: sigmoidDerivative,
 	},
 	EluActivation: {
 		Name:       EluActivation,
-		Function:   eluActivation,
-		Derivative: eluActivationDerivative,
+		Function:   elu,
+		Derivative: eluDerivative,
 	},
 	ReLUActivation: {
 		Name:       ReLUActivation,
-		Function:   reluActivation,
-		Derivative: reluActivationDerivative,
+		Function:   relu,
+		Derivative: reluDerivative,
 	},
 }
 
@@ -61,7 +61,7 @@ var modeSettings = map[modeType]configMode{
 }
 
 type activationType string
-type activationFunction func(float64) float64
+type activationFunction func(*mat.Dense) *mat.Dense
 
 type modeType string
 type outputActivationFunction func(*mat.Dense) *mat.Dense
@@ -84,61 +84,89 @@ type activation struct {
 }
 
 // implements the Tanh function for use in activation functions.
-func tanhActivation(x float64) float64 {
-	return math.Tanh(x)
+func tanh(a *mat.Dense) *mat.Dense {
+	return ngo.ApplyRaw(a, func(data []float64) {
+		for i := range data {
+			data[i] = math.Tanh(data[i])
+		}
+	})
 }
 
 // implements the derivative of the Tanh function for backpropagation.
-func tanhActivationDerivative(x float64) float64 {
-	return 1.0 - tanhActivation(x)*tanhActivation(x)
+func tanhDerivative(a *mat.Dense) *mat.Dense {
+	return ngo.ApplyRaw(a, func(data []float64) {
+		for i := range data {
+			t := math.Tanh(data[i])
+			data[i] = 1.0 - t*t
+		}
+	})
 }
 
 // implements the sigmoid function for use in activation functions.
-func sigmoidActivation(x float64) float64 {
-	return 1.0 / (1.0 + math.Exp(-x))
+func sigmoid(a *mat.Dense) *mat.Dense {
+	return ngo.ApplyRaw(a, func(data []float64) {
+		for i := range data {
+			data[i] = 1.0 / (1.0 + math.Exp(-data[i]))
+		}
+	})
 }
 
 // implements the derivative of the sigmoid function for backpropagation.
-func sigmoidActivationDerivative(x float64) float64 {
-	return sigmoidActivation(x) * (1.0 - sigmoidActivation(x))
+func sigmoidDerivative(a *mat.Dense) *mat.Dense {
+	return ngo.ApplyRaw(a, func(data []float64) {
+		for i := range data {
+			s := 1.0 / (1.0 + math.Exp(-data[i]))
+			data[i] = s * (1.0 - s)
+		}
+	})
 }
 
 // implements the elu function for use in activation functions.
-func eluActivation(x float64) float64 {
-	var out float64
-	if x <= 0 {
-		out = math.Exp(x) - 1.0
-	} else {
-		out = x
-	}
-	return out
+func elu(a *mat.Dense) *mat.Dense {
+	return ngo.ApplyRaw(a, func(data []float64) {
+		for i := range data {
+			if data[i] <= 0 {
+				data[i] = math.Exp(data[i]) - 1.0
+			}
+		}
+	})
 }
 
 // implements the derivative of the elu function for backpropagation.
-func eluActivationDerivative(x float64) float64 {
-	var out float64
-	if x < 0 {
-		out = math.Exp(x)
-	} else {
-		out = 1.0
-	}
-	return out
+func eluDerivative(a *mat.Dense) *mat.Dense {
+	return ngo.ApplyRaw(a, func(data []float64) {
+		for i := range data {
+			if data[i] < 0 {
+				data[i] = math.Exp(data[i])
+			} else {
+				data[i] = 1.0
+			}
+		}
+	})
 }
 
 // implements the relu function for use in activation functions.
-func reluActivation(x float64) float64 {
-	if x > 0 {
-		return x
-	}
-	return 0
+func relu(a *mat.Dense) *mat.Dense {
+	return ngo.ApplyRaw(a, func(data []float64) {
+		for i := range data {
+			if data[i] < 0 {
+				data[i] = 0
+			}
+		}
+	})
 }
 
 // implements the derivative of the relu function for backpropagation.
-func reluActivationDerivative(x float64) float64 {
-	if x > 0 {
-		return 1
-	}
-	return 0
+func reluDerivative(a *mat.Dense) *mat.Dense {
+	return ngo.ApplyRaw(a, func(data []float64) {
+		for i := range data {
+			if data[i] > 0 {
+				data[i] = 1
+			} else {
+				data[i] = 0
+			}
+		}
+	})
 }
 
 type outputActivation struct {
@@ -169,4 +197,9 @@ func applySigmoid(a *mat.Dense) *mat.Dense {
 	sigmoid := ngo.Apply(applySigmoid, a)
 
 	return sigmoid
+}
+
+// implements the sigmoid function for use in activation functions.
+func sigmoidActivation(x float64) float64 {
+	return 1.0 / (1.0 + math.Exp(-x))
 }

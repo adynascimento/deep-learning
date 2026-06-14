@@ -108,13 +108,12 @@ func (nm *neuralModel) ForwardPropagation(x *mat.Dense) (*mat.Dense, map[string]
 	A := make(map[string]*mat.Dense) // activation function
 	A[strconv.Itoa(0)] = x
 
-	applyActivationFunction := func(_, _ int, v float64) float64 { return nm.Activation.Function(v) }
 	for l := 0; l < L-1; l++ {
 		W := nm.Parameters["W"+strconv.Itoa(l+1)] // weights W
 		b := nm.Parameters["b"+strconv.Itoa(l+1)] // biases b
 
 		Z[strconv.Itoa(l+1)] = ngo.AddMatrixVector(ngo.MatMul(W, A[strconv.Itoa(l)]), b) // compute the linear operation
-		A[strconv.Itoa(l+1)] = ngo.Apply(applyActivationFunction, Z[strconv.Itoa(l+1)])  // compute the non linear operation
+		A[strconv.Itoa(l+1)] = nm.Activation.Function(Z[strconv.Itoa(l+1)])              // compute the non linear operation
 	}
 	// for output layer
 	Z[strconv.Itoa(L)] = ngo.AddMatrixVector(ngo.MatMul(nm.Parameters["W"+strconv.Itoa(L)],
@@ -142,10 +141,9 @@ func (nm *neuralModel) BackwardPropagation(Z, A map[string]*mat.Dense, y *mat.De
 		ngo.Scale(nm.L2Regularization/float64(m), nm.Parameters["W"+strconv.Itoa(L)]))
 	db[strconv.Itoa(L)] = ngo.Sum(dZ[strconv.Itoa(L)], ngo.OverColumns)
 
-	applyActivationFunctionDerivative := func(_, _ int, v float64) float64 { return nm.Activation.Derivative(v) }
 	for l := L - 1; l > 0; l-- {
 		dA[strconv.Itoa(l)] = ngo.MatMul(nm.Parameters["W"+strconv.Itoa(l+1)].T(), dZ[strconv.Itoa(l+1)])
-		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], ngo.Apply(applyActivationFunctionDerivative, Z[strconv.Itoa(l)]))
+		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], nm.Activation.Derivative(Z[strconv.Itoa(l)]))
 		dW[strconv.Itoa(l)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(l)], A[strconv.Itoa(l-1)].T()),
 			ngo.Scale(nm.L2Regularization/float64(m), nm.Parameters["W"+strconv.Itoa(l)]))
 		db[strconv.Itoa(l)] = ngo.Sum(dZ[strconv.Itoa(l)], ngo.OverColumns)
@@ -203,11 +201,12 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, verbose bool) []float64 {
 		meanLoss := stat.Mean(lossBatches, nil)
 		if verbose && i%(nm.Epochs/10) == 0 || verbose && i == 1 {
 			if nm.Mode == ModeRegression {
-				fmt.Printf(" | t: %7.2fs | loss: %.6e \n", time.Since(start).Seconds(), meanLoss)
+				fmt.Printf(" | t: %7.2fms | loss: %.6e \n", float64(time.Since(start))/float64(time.Millisecond), meanLoss)
 			} else {
-				fmt.Printf(" | t: %7.2fs | loss: %.6e | acc: %.4f \n",
-					time.Since(start).Seconds(), meanLoss, nm.Evaluate(xTrain, yTrain))
+				fmt.Printf(" | t: %7.2fms | loss: %.6e | acc: %.4f \n",
+					float64(time.Since(start))/float64(time.Millisecond), meanLoss, nm.Evaluate(xTrain, yTrain))
 			}
+			start = time.Now()
 		}
 		losses = append(losses, meanLoss)
 	}

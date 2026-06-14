@@ -8,6 +8,7 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/schollz/progressbar/v3 v3.14.4
 	gonum.org/v1/gonum v0.14.0
+	gonum.org/v1/netlib v0.0.0-20230729102104-8b8060e7531f
 )
 
 require (
