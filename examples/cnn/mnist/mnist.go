@@ -3,12 +3,23 @@ package main
 import (
 	"fmt"
 
+	/*
+		#cgo CFLAGS: -g -O2
+		#cgo LDFLAGS: -framework Accelerate
+	*/
+	"C"
+
+	"gonum.org/v1/gonum/blas/blas64"
+	"gonum.org/v1/netlib/blas/netlib"
+
 	"github.com/adynascimento/deep-learning/cnn"
 	"github.com/adynascimento/deep-learning/ngo"
 	"gonum.org/v1/gonum/mat"
 )
 
 func main() {
+	blas64.Use(netlib.Implementation{})
+
 	// training data
 	x := LoadDataFromFile("../../dataset/mnist/train_x_shuffled.csv")
 	v := LoadDataFromFile("../../dataset/mnist/test_x.csv")

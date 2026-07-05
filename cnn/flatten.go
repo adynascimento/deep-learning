@@ -20,23 +20,20 @@ func (fl *flatten) ForwardPropagation(x [][]*mat.Dense) *mat.Dense {
 	hOut, wOut := x[0][0].Dims()
 
 	// store the input shape
-	fl.Shape = append(fl.Shape, nTraining, nFilters, hOut, wOut)
+	fl.Shape = []int{nTraining, nFilters, hOut, wOut}
 
 	result := mat.NewDense(nFilters*hOut*wOut, nTraining, nil)
+	resRaw := result.RawMatrix()
 	for i := 0; i < nTraining; i++ {
+		feature := 0
 		for j := 0; j < nFilters; j++ {
-			// Flatten the matrix (hOut, wOut) into a vector
-			flatPatch := make([]float64, 0, hOut*wOut)
-			for k := 0; k < hOut; k++ {
-				for l := 0; l < wOut; l++ {
-					flatPatch = append(flatPatch, x[i][j].At(k, l))
-				}
-			}
+			// underlying flattened data
+			src := x[i][j].RawMatrix().Data
 
-			// fills row i of the resulting matrix with the flattened vector
-			rowOffset := j * hOut * wOut
-			for k := 0; k < len(flatPatch); k++ {
-				result.Set(rowOffset+k, i, flatPatch[k])
+			// copy the flattened feature map into column i of the output matrix
+			for _, v := range src {
+				resRaw.Data[feature*resRaw.Stride+i] = v
+				feature++
 			}
 		}
 	}
@@ -45,7 +42,7 @@ func (fl *flatten) ForwardPropagation(x [][]*mat.Dense) *mat.Dense {
 }
 
 // backward propagation step: flatten operation
-// gradient dA with shape (nTraining, nFilters*rows*cols)
+// gradient dA with shape (nFilters*hOut*wOut, nTraining)
 func (fl *flatten) BackwardPropagation(dA *mat.Dense) [][]*mat.Dense {
 	nTraining := fl.Shape[0]
 	nFilters := fl.Shape[1]
@@ -61,15 +58,15 @@ func (fl *flatten) BackwardPropagation(dA *mat.Dense) [][]*mat.Dense {
 		}
 	}
 
-	// reshape the gradient back to the original shape
+	// reshape the gradient back to the original shape (nTraining, nFilters, hOut, wOut)
+	dARaw := dA.RawMatrix()
 	for i := 0; i < nTraining; i++ {
+		feature := 0
 		for j := 0; j < nFilters; j++ {
-			rowOffset := j * hOut * wOut
-			for k := 0; k < hOut; k++ {
-				for l := 0; l < wOut; l++ {
-					value := dA.At(rowOffset+k*wOut+l, i)
-					x[i][j].Set(k, l, value)
-				}
+			dst := x[i][j].RawMatrix().Data
+			for k := range dst {
+				dst[k] = dARaw.Data[feature*dARaw.Stride+i]
+				feature++
 			}
 		}
 	}

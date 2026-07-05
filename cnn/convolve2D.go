@@ -29,12 +29,13 @@ func Im2Col(x *mat.Dense, filterRows, filterCols, stride int) *mat.Dense {
 
 	colIdx := 0
 	xValue := x.RawMatrix()
+	colsRaw := cols.RawMatrix()
 	for i := 0; i <= h-filterRows; i += stride {
 		for j := 0; j <= w-filterCols; j += stride {
 			for k := 0; k < filterRows; k++ {
 				for l := 0; l < filterCols; l++ {
 					xIndex := (i+k)*xValue.Cols + (j + l)
-					cols.Set(k*filterCols+l, colIdx, xValue.Data[xIndex])
+					colsRaw.Data[(k*filterCols+l)*colsRaw.Stride+colIdx] = xValue.Data[xIndex]
 				}
 			}
 			colIdx++
@@ -66,3 +67,30 @@ func Reshape(x *mat.Dense, rows, cols int) *mat.Dense {
 	}
 	return mat.NewDense(rows, cols, newMat)
 }
+
+// insert stride-1 zeros between rows and columns.
+// it is used in the input-gradient convolution when the forward convolution used stride > 1.
+func UpSampleZeros2D(x *mat.Dense, stride int) *mat.Dense {
+	if stride <= 1 {
+		return mat.DenseCopyOf(x)
+	}
+
+	rows, cols := x.Dims()
+	dilatedRows := (rows-1)*stride + 1
+	dilatedCols := (cols-1)*stride + 1
+
+	out := mat.NewDense(dilatedRows, dilatedCols, nil)
+
+	xRaw := x.RawMatrix()
+	outRaw := out.RawMatrix()
+	for r := 0; r < rows; r++ {
+		for c := 0; c < cols; c++ {
+			outRow := r * stride
+			outCol := c * stride
+			outRaw.Data[outRow*outRaw.Stride+outCol] = xRaw.Data[r*xRaw.Stride+c]
+		}
+	}
+
+	return out
+}
+

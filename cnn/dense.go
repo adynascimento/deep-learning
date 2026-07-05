@@ -45,13 +45,12 @@ func (dl *denseLayer) ForwardPropagation(x *mat.Dense) (*mat.Dense, map[string]*
 	A := make(map[string]*mat.Dense) // activation function
 	A[strconv.Itoa(0)] = x
 
-	applyActivationFunction := func(_, _ int, v float64) float64 { return dl.Activation.Function(v) }
 	for l := 0; l < L-1; l++ {
 		W := dl.Parameters["W"+strconv.Itoa(l+1)] // weights W
 		b := dl.Parameters["b"+strconv.Itoa(l+1)] // biases b
 
 		Z[strconv.Itoa(l+1)] = ngo.AddMatrixVector(ngo.MatMul(W, A[strconv.Itoa(l)]), b) // compute the linear operation
-		A[strconv.Itoa(l+1)] = ngo.Apply(applyActivationFunction, Z[strconv.Itoa(l+1)])  // compute the non linear operation
+		A[strconv.Itoa(l+1)] = dl.Activation.Function(Z[strconv.Itoa(l+1)])              // compute the non linear operation
 	}
 	// for output layer
 	Z[strconv.Itoa(L)] = ngo.AddMatrixVector(ngo.MatMul(dl.Parameters["W"+strconv.Itoa(L)], A[strconv.Itoa(L-1)]), dl.Parameters["b"+strconv.Itoa(L)])
@@ -77,10 +76,9 @@ func (dl *denseLayer) BackwardPropagation(Z, A map[string]*mat.Dense, y *mat.Den
 	dW[strconv.Itoa(L)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(L)], A[strconv.Itoa(L-1)].T()), ngo.Scale(lambd/float64(m), dl.Parameters["W"+strconv.Itoa(L)]))
 	db[strconv.Itoa(L)] = ngo.Sum(dZ[strconv.Itoa(L)], ngo.OverColumns)
 
-	applyActivationFunctionDerivative := func(_, _ int, v float64) float64 { return dl.Activation.Derivative(v) }
 	for l := L - 1; l > 0; l-- {
 		dA[strconv.Itoa(l)] = ngo.MatMul(dl.Parameters["W"+strconv.Itoa(l+1)].T(), dZ[strconv.Itoa(l+1)])
-		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], ngo.Apply(applyActivationFunctionDerivative, Z[strconv.Itoa(l)]))
+		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], dl.Activation.Derivative(Z[strconv.Itoa(l)]))
 		dW[strconv.Itoa(l)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(l)], A[strconv.Itoa(l-1)].T()), ngo.Scale(lambd/float64(m), dl.Parameters["W"+strconv.Itoa(l)]))
 		db[strconv.Itoa(l)] = ngo.Sum(dZ[strconv.Itoa(l)], ngo.OverColumns)
 	}
@@ -90,7 +88,7 @@ func (dl *denseLayer) BackwardPropagation(Z, A map[string]*mat.Dense, y *mat.Den
 	dl.Iter++
 
 	dA[strconv.Itoa(0)] = ngo.MatMul(dl.Parameters["W"+strconv.Itoa(1)].T(), dZ[strconv.Itoa(1)])
-	
+
 	return dA[strconv.Itoa(0)]
 }
 
@@ -100,7 +98,7 @@ func initializeParameters(nnStructure []int) map[string]*mat.Dense {
 	L := len(nnStructure) - 1                 // number of layers
 
 	for l := 0; l < L; l++ {
-		scalar := math.Sqrt((6.0 / float64(nnStructure[l]+nnStructure[l+1])))*0.1
+		scalar := math.Sqrt((6.0 / float64(nnStructure[l]+nnStructure[l+1]))) * 0.1
 
 		parameters["W"+strconv.Itoa(l+1)] = ngo.Scale(scalar, ngo.Randn(nnStructure[l+1], nnStructure[l]))
 		parameters["b"+strconv.Itoa(l+1)] = mat.NewDense(nnStructure[l+1], 1, nil)
