@@ -22,9 +22,9 @@ type convLayer struct {
 }
 
 type parameters struct {
-	W       [][]*mat.Dense // weights with shape (nFilters, nChannels, filterSize, filterSize)
-	B       *mat.Dense     // biases with shape (nFilters, 1)
-	wRotBig *mat.Dense     // rotated weights with shape (nChannels, nFilters*filterSize*filterSize)
+	W    [][]*mat.Dense // weights with shape (nFilters, nChannels, filterSize, filterSize)
+	B    *mat.Dense     // biases with shape (nFilters, 1)
+	wBig *mat.Dense     // flattened weights with shape (nFilters, nChannels*filterSize*filterSize)
 }
 
 type gradients struct {
@@ -57,17 +57,16 @@ func newConvLayer(nFilters, filterSize, stride int, activation activation, optTy
 	// K is the number of weights per input channel
 	K := filterSize * filterSize
 
-	// wRotBig will have a shape: nChannels x nFilters*K
-	// this causes MatMul to sum, all at once, the contribution of all filters to channel c.
-	// rotate weights for backpropagation
-	wRotBig := mat.NewDense(nChannels, nFilters*K, nil)
-	for c := 0; c < nChannels; c++ {
-		row := wRotBig.RawRowView(c)
-		for f := 0; f < nFilters; f++ {
-			rot := ngo.Rotate180(filters[f][c])
+	// wBig will have a shape: nFilters x nChannels*K.
+	// each row contains one filter flattened across all input channels.
+	// each block of K values corresponds to one input channel.
+	wBig := mat.NewDense(nFilters, nChannels*K, nil)
+	for f := 0; f < nFilters; f++ {
+		row := wBig.RawRowView(f)
+		for c := 0; c < nChannels; c++ {
 			copy(
-				row[f*K:(f+1)*K],
-				rot.RawMatrix().Data,
+				row[c*K:(c+1)*K],
+				filters[f][c].RawMatrix().Data,
 			)
 		}
 	}
@@ -86,9 +85,9 @@ func newConvLayer(nFilters, filterSize, stride int, activation activation, optTy
 		OutputShape:     outputShape,
 		TrainableParams: nFilters * (filterSize*filterSize*nChannels + 1),
 		Parameters: parameters{
-			W:       filters,
-			B:       mat.NewDense(nFilters, 1, nil),
-			wRotBig: wRotBig,
+			W:    filters,
+			B:    mat.NewDense(nFilters, 1, nil),
+			wBig: wBig,
 		},
 		Activation: activation,
 		Gradients:  gradients,
@@ -121,7 +120,6 @@ func newGradients(nFilters, nChannels, filterSize int) gradients {
 // input x with shape (nChannels, hIn, wIn)
 func (cl *convLayer) ForwardPropagation(x []*mat.Dense) ([]*mat.Dense, []*mat.Dense) {
 	stride := cl.Stride
-	W := cl.Parameters.W
 	b := cl.Parameters.B
 
 	nFilters := cl.NFilters
@@ -158,28 +156,13 @@ func (cl *convLayer) ForwardPropagation(x []*mat.Dense) ([]*mat.Dense, []*mat.De
 		}
 	}
 
-	// wBig will have a shape: nFilters x nChannels*K.
-	// each row contains one filter flattened across all input channels.
-	// each block of K values corresponds to one input channel.
-	wBig := mat.NewDense(nFilters, nChannels*K, nil)
-	for f := 0; f < nFilters; f++ {
-		row := wBig.RawRowView(f)
-		for c := 0; c < nChannels; c++ {
-			copy(
-				row[c*K:(c+1)*K],
-				W[f][c].RawMatrix().Data,
-			)
-		}
-	}
-
 	// batched version of all convolutions using Im2Col + GEMM.
 	// shapes:
 	//     wBig: nFilters x nChannels*K
 	//     xBig: nChannels*K x P
 	// zBig will have a shape: nFilters x P.
 	// each row contains the flattened output feature map of one filter.
-	zBig := ngo.MatMul(wBig, xBig)
-
+	zBig := ngo.MatMul(cl.Parameters.wBig, xBig)
 	for f := 0; f < nFilters; f++ {
 		z := mat.NewDense(hOut, wOut, nil)
 		copy(
@@ -204,25 +187,38 @@ func (cl *convLayer) BackwardPropagation(x []*mat.Dense, Z, dA []*mat.Dense, wor
 	stride := cl.Stride
 	nFilters := cl.NFilters
 
-	// compute all dZ once in relation to the linear output Z of each filter
-	dZs := make([]*mat.Dense, nFilters)
+	// P is the number of spatial positions in the output of the original convolution
+	// it is also the number of columns produced by Im2Col in the forward pass
+	dARows, dACols := dA[0].Dims()
+	P := dARows * dACols
+
+	// dZBig will have a shape: nFilters x P
+	// each line is a flattened dZ[f]
+	dZBig := mat.NewDense(nFilters, P, nil)
+
+	// compute dZ and stack all filter gradients into dZBig
 	for f := 0; f < nFilters; f++ {
 		// apply gradient of activation function to dA: dZ[f] = dA[f] ⊙ activation'(Z[f])
 		dZ := ngo.Multiply(dA[f], cl.Activation.Derivative(Z[f]))
 
-		dZs[f] = dZ
+		// stack dZ directly
+		copy(
+			dZBig.RawRowView(f),
+			dZ.RawMatrix().Data,
+		)
+
 		workerGradient.DB.Set(f, 0, workerGradient.DB.At(f, 0)+mat.Sum(dZ))
 	}
 
 	// propagate dZ to the filters W.
 	// equivalent to dW[f][c] = Convolve2D(x[c], dZs[f]), computed as one GEMM
 	// store the result in cl.Gradients.DW for all filters and channels.
-	cl.BackwardWeightGradients(x, dZs, stride, workerGradient)
+	cl.BackwardWeightGradients(x, dZBig, stride, workerGradient)
 
 	// propagate dZ to the previous input x.
 	// equivalent to summing Convolve2D(Pad(dZs[f]), Rotate180(W[f][c])) over filters.
-	// Rotate180(W[f][c]) is precomputed in cl.Parameters.wRotBig for all filters and channels.
-	dxPrev := cl.BackwardInputGradients(dZs, stride)
+	// but computed in batch with GEMM + Col2Im for performance.
+	dxPrev := cl.BackwardInputGradients(dZBig, stride)
 
 	return dxPrev
 }
@@ -230,7 +226,7 @@ func (cl *convLayer) BackwardPropagation(x []*mat.Dense, Z, dA []*mat.Dense, wor
 // compute dW with the convolution gradients for W.
 // it is equivalent to: dW[f][c] = Convolve2D(x[c], dZs[f], stride),
 // computed in batch with im2col + GEMM for performance
-func (cl *convLayer) BackwardWeightGradients(x, dZs []*mat.Dense, stride int, workerGradient *gradients) {
+func (cl *convLayer) BackwardWeightGradients(x []*mat.Dense, dZBig *mat.Dense, stride int, workerGradient *gradients) {
 	nFilters := cl.NFilters
 	nChannels := cl.NChannels
 
@@ -238,19 +234,8 @@ func (cl *convLayer) BackwardWeightGradients(x, dZs []*mat.Dense, stride int, wo
 	K := cl.FilterSize * cl.FilterSize
 
 	// P is the number of spatial positions in the output of the original convolution
-	// it is also the number of elements in each dZ[f]
-	dZRows, dZCols := dZs[0].Dims()
-	P := dZRows * dZCols
-
-	// dZBig will have a shape: nFilters x P
-	// each line is a flattened dZ[f]
-	dZBig := mat.NewDense(nFilters, P, nil)
-	for f := 0; f < nFilters; f++ {
-		copy(
-			dZBig.RawRowView(f),
-			dZs[f].RawMatrix().Data,
-		)
-	}
+	// it is also the number of columns produced by Im2Col in the forward pass
+	P := dZBig.RawMatrix().Cols
 
 	// xBig will have a shape: nChannels*K x P
 	xBig := mat.NewDense(nChannels*K, P, nil)
@@ -291,62 +276,41 @@ func (cl *convLayer) BackwardWeightGradients(x, dZs []*mat.Dense, stride int, wo
 
 // compute dxPrev with the convolution gradients for the input x
 // it is equivalent to: dxPrev[c] += Convolve2D(ZeroPadding(dZs[f], filterSize-1), Rotate180(W[f][c]), stride)
-// for every filter f and input channel c, computed in batch with im2col + GEMM for performance.
-func (cl *convLayer) BackwardInputGradients(dZs []*mat.Dense, stride int) []*mat.Dense {
-	nFilters := cl.NFilters
+// for every filter f and input channel c, but computed in batch with GEMM + Col2Im for performance.
+func (cl *convLayer) BackwardInputGradients(dZBig *mat.Dense, stride int) []*mat.Dense {
 	nChannels := cl.NChannels
 
 	// K is the number of weights per input channel
 	K := cl.FilterSize * cl.FilterSize
 
-	// padding dZ and convolving with rotated filters gives the full convolution
-	// necessary to recover a dx with the spatial size of the original input
-	padCols := make([]*mat.Dense, nFilters)
-	for f := 0; f < nFilters; f++ {
-		dZ := dZs[f]
-		if stride > 1 {
-			dZ = UpSampleZeros2D(dZ, stride)
-		}
-
-		padDZ := ngo.ZeroPadding(dZ, cl.FilterSize-1)
-		padCols[f] = Im2Col(padDZ, cl.FilterSize, cl.FilterSize, stride)
-	}
-
-	// Q is the quantity of spatial positions of dx.
-	Q := padCols[0].RawMatrix().Cols
-
-	// dZBig will have a shape: nFilters*K x Q
-	// for each filter f, we stack all the patches of dZ[f] with padding.
-	// each block of K lines corresponds to a filter f.
-	dZBig := mat.NewDense(nFilters*K, Q, nil)
-	for f := 0; f < nFilters; f++ {
-		cols := padCols[f].RawMatrix()
-		for k := 0; k < K; k++ {
-			copy(
-				dZBig.RawRowView(f*K+k),
-				cols.Data[k*cols.Stride:k*cols.Stride+Q],
-			)
-		}
-	}
+	// P is the number of spatial positions in the output of the original convolution
+	// it is also the number of columns produced by Im2Col in the forward pass
+	P := dZBig.RawMatrix().Cols
 
 	// this multiplication is the batch version.
 	// shapes:
-	//     wRotBig: nChannels x nFilters*K
-	//     dZBig:   nFilters*K x Q
-	// dxBig will have a shape: nChannels x Q
-	// each line is the dx of a channel, flattened.
-	dxBig := ngo.MatMul(cl.Parameters.wRotBig, dZBig)
+	//     wBigT:  nChannels*K x nFilters
+	//     dZBig:  nFilters x P
+	// dxBig will have shape: nChannels*K x P.
+	// each input channel, a block of K rows stores the column representation
+	// of the input gradients, before reconstruction with Col2Im.
+	dxBig := ngo.MatMul(cl.Parameters.wBig.T(), dZBig)
 
 	// initialize gradient for input x
 	// input dxPrev with shape (nChannels, hIn, wIn)
 	// copy the flattened result to the dxPrev
 	dxPrev := make([]*mat.Dense, nChannels)
 	for c := 0; c < nChannels; c++ {
-		dxPrev[c] = mat.NewDense(cl.InputShape[1], cl.InputShape[2], nil)
-		copy(
-			dxPrev[c].RawMatrix().Data,
-			dxBig.RawRowView(c),
-		)
+		xCol := mat.NewDense(K, P, nil)
+		for k := 0; k < K; k++ {
+			copy(
+				xCol.RawRowView(k),
+				dxBig.RawRowView(c*K+k),
+			)
+		}
+
+		// reconstruct the spatial gradient of this input channel.
+		dxPrev[c] = Col2Im(xCol, cl.InputShape[1], cl.InputShape[2], cl.FilterSize, cl.FilterSize, stride)
 	}
 
 	return dxPrev
@@ -385,14 +349,13 @@ func (cl *convLayer) UpdateParameters(learningRate float64) {
 	// K is the number of weights per input channel
 	K := cl.FilterSize * cl.FilterSize
 
-	// rotate weights after update for backpropagation
-	for c := 0; c < cl.NChannels; c++ {
-		row := cl.Parameters.wRotBig.RawRowView(c)
-		for f := 0; f < cl.NFilters; f++ {
-			rot := ngo.Rotate180(cl.Parameters.W[f][c])
+	// flattened weights after update
+	for f := 0; f < cl.NFilters; f++ {
+		row := cl.Parameters.wBig.RawRowView(f)
+		for c := 0; c < cl.NChannels; c++ {
 			copy(
-				row[f*K:(f+1)*K],
-				rot.RawMatrix().Data,
+				row[c*K:(c+1)*K],
+				cl.Parameters.W[f][c].RawMatrix().Data,
 			)
 		}
 	}

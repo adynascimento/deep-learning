@@ -44,6 +44,27 @@ func Im2Col(x *mat.Dense, filterRows, filterCols, stride int) *mat.Dense {
 	return cols
 }
 
+// convert the column-based vector back to the original image matrix
+func Col2Im(cols *mat.Dense, inputRows, inputCols, filterRows, filterCols, stride int) *mat.Dense {
+	x := mat.NewDense(inputRows, inputCols, nil)
+
+	colIdx := 0
+	xValue := x.RawMatrix()
+	colsRaw := cols.RawMatrix()
+	for i := 0; i <= inputRows-filterRows; i += stride {
+		for j := 0; j <= inputCols-filterCols; j += stride {
+			for k := 0; k < filterRows; k++ {
+				for l := 0; l < filterCols; l++ {
+					xIndex := (i+k)*xValue.Cols + (j + l)
+					xValue.Data[xIndex] += colsRaw.Data[(k*filterCols+l)*colsRaw.Stride+colIdx]
+				}
+			}
+			colIdx++
+		}
+	}
+	return x
+}
+
 // flatten convert matrix to vector
 func Flatten(x *mat.Dense) *mat.Dense {
 	height, width := x.Dims()
@@ -93,4 +114,3 @@ func UpSampleZeros2D(x *mat.Dense, stride int) *mat.Dense {
 
 	return out
 }
-
