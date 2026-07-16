@@ -731,7 +731,7 @@ loadedCNN := cnn.Load("my_cnn_model.json")
 
 ## 📝 License
 
-This project is licensed under the MIT License. See the LICENSE file for details. All computational code follows standard open-source practices and is provided as-is.
+This project is licensed under the MIT License. See the [MIT LICENSE](LICENSE) file for details.
 
 ---
 
