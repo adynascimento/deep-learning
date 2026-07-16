@@ -39,7 +39,7 @@ func main() {
 		network.WithBatchSize(32),
 		network.WithL2Regularization(1.40e-06))
 	model.Summary()
-	model.Fit(xTrain, yTrain, true)
+	model.Fit(xTrain, yTrain)
 
 	// saves neural network model to file
 	model.Save("networkmodel.json")

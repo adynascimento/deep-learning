@@ -54,7 +54,7 @@ func main() {
 		LearningRate: 0.001,
 		Epochs:       100})
 	model.Summary()
-	model.Fit(xTrain, yTrain, true)
+	model.Fit(xTrain, yTrain)
 
 	// accuracy of the model making predictions
 	fmt.Println()

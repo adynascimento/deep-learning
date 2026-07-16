@@ -33,7 +33,7 @@ func main() {
 		LearningRate: 0.001,                 // learning rate
 		Epochs:       10000},                // number of iterations
 		network.WithL2Regularization(1.40e-06))
-	model.Fit(xTrain, yTrain, true)
+	model.Fit(xTrain, yTrain)
 
 	// saves neural network model to file
 	model.Save("networkmodel.json")

@@ -91,7 +91,7 @@ func main() {
 		Epochs:       10000},
 		network.WithL2Regularization(1.40e-06))
 	
-	model.Fit(xTrain, yTrain, true)
+	model.Fit(xTrain, yTrain)
 	model.Save("networkmodel.json")
 
 	// make predictions
@@ -145,7 +145,7 @@ func main() {
 		network.WithL2Regularization(1.40e-06))
 	
 	model.Summary()
-	model.Fit(xTrain, yTrain, true)
+	model.Fit(xTrain, yTrain)
 	model.Save("networkmodel.json")
 
 	// evaluate
@@ -221,7 +221,7 @@ func main() {
 		cnn.WithL2Regularization(1.40e-06))
 	
 	model.Summary()
-	model.Fit(xTrain, yTrain, true)
+	model.Fit(xTrain, yTrain)
 	model.Save("networkmodel.json")
 
 	// evaluate
@@ -275,7 +275,7 @@ func main() {
 		Epochs:       100},
 		network.WithBatchSize(16))
 	
-	model.Fit(xTrain, yTrain, true)
+	model.Fit(xTrain, yTrain)
 	fmt.Printf("training accuracy: %.4f\n", model.Evaluate(xTrain, yTrain))
 	fmt.Printf("testing accuracy:  %.4f\n", model.Evaluate(xTest, yTest))
 }
@@ -491,7 +491,7 @@ func main() {
 		cnn.WithL2Regularization(1e-5))
 	
 	model.Summary()
-	model.Fit(xTrain, yTrain, true)
+	model.Fit(xTrain, yTrain)
 	model.Save("networkmodel.json")
 
 	// evaluate

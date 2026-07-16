@@ -21,7 +21,7 @@ type NeuralNetwork interface {
 }
 
 type NeuralModel interface {
-	Fit(xTrain *mat.Dense, yTrain *mat.Dense, verbose bool) []float64
+	Fit(xTrain *mat.Dense, yTrain *mat.Dense, options ...func(*fitConfig)) []float64
 	Predict(x *mat.Dense) *mat.Dense
 	Evaluate(x *mat.Dense, y *mat.Dense) float64
 	Save(path string)
@@ -58,6 +58,11 @@ type neuralModel struct {
 	BatchSize        int
 }
 
+type fitConfig struct {
+	Verbose     bool
+	LogInterval int
+}
+
 func NewNeuralNetwork(config NeuralConfig) NeuralNetwork {
 	// choice of activation function
 	activationFunction := activationSettings[config.Activation]
@@ -91,6 +96,7 @@ func (nn *neuralNetwork) NewTrainer(config TrainerConfig, options ...func(*neura
 		Optimizer:     optimizer,
 		LearningRate:  config.LearningRate,
 		Epochs:        config.Epochs,
+		BatchSize:     32,
 	}
 
 	// apply additional options
@@ -156,22 +162,30 @@ func (nm *neuralModel) BackwardPropagation(Z, A map[string]*mat.Dense, y *mat.De
 // which is represented as an rows X cols matrix a where each
 // row is a variable and each column is an observation.
 // matrix shape (nFeatures, nSamples)
-func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, verbose bool) []float64 {
+func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig)) []float64 {
 	nSamples := xTrain.RawMatrix().Cols
-	if nm.BatchSize == 0 {
-		nm.BatchSize = nSamples
+
+	// default values
+	config := fitConfig{
+		Verbose:     true,
+		LogInterval: 1,
+	}
+
+	// apply additional options
+	for _, opt := range options {
+		opt(&config)
 	}
 
 	// keep track of the loss
 	losses := []float64{}
 
 	// loop
-	start := time.Now()
 	iterPerEpoch := int(math.Ceil(float64(nSamples) / float64(nm.BatchSize)))
 	for i := 1; i <= nm.Epochs; i++ {
+		start := time.Now()
 		lossBatches := []float64{}
 
-		bar := progressBar(iterPerEpoch, fmt.Sprintf("epoch %5d/%d: ", i, nm.Epochs))
+		bar := progressBar(iterPerEpoch, fmt.Sprintf("epoch %5d/%d: ", i, nm.Epochs), config.Verbose)
 		for startIdx := 0; startIdx < nSamples; startIdx += nm.BatchSize {
 			bar.Add(1)
 			endIdx := startIdx + nm.BatchSize
@@ -199,14 +213,13 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, verbose bool) []float64 {
 
 		// print the loss every x iterations
 		meanLoss := stat.Mean(lossBatches, nil)
-		if verbose && i%(nm.Epochs/10) == 0 || verbose && i == 1 {
+		if config.Verbose && (i%config.LogInterval == 0 || i == 1 || i == nm.Epochs) {
 			if nm.Mode == ModeRegression {
 				fmt.Printf(" | t: %7.2fms | loss: %.6e \n", float64(time.Since(start))/float64(time.Millisecond), meanLoss)
 			} else {
 				fmt.Printf(" | t: %7.2fms | loss: %.6e | acc: %.4f \n",
 					float64(time.Since(start))/float64(time.Millisecond), meanLoss, nm.Evaluate(xTrain, yTrain))
 			}
-			start = time.Now()
 		}
 		losses = append(losses, meanLoss)
 	}
@@ -293,13 +306,14 @@ func initializeParameters(nnStructure []int) map[string]*mat.Dense {
 }
 
 // progress bar
-func progressBar(iter int, description string) *progressbar.ProgressBar {
+func progressBar(iter int, description string, verbose bool) *progressbar.ProgressBar {
 	return progressbar.NewOptions(iter,
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionSetWidth(20),
 		progressbar.OptionShowCount(),
 		progressbar.OptionShowElapsedTimeOnFinish(),
 		progressbar.OptionSetDescription(description),
+		progressbar.OptionSetVisibility(verbose),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "[green]━[reset]",
 			SaucerPadding: " ",
@@ -316,5 +330,19 @@ func WithBatchSize(batchSize int) func(*neuralModel) {
 func WithL2Regularization(lambd float64) func(*neuralModel) {
 	return func(nm *neuralModel) {
 		nm.L2Regularization = lambd
+	}
+}
+
+func WithVerbose(verbose bool) func(*fitConfig) {
+	return func(c *fitConfig) {
+		c.Verbose = verbose
+	}
+}
+
+func WithLogInterval(interval int) func(*fitConfig) {
+	return func(c *fitConfig) {
+		if interval > 0 {
+			c.LogInterval = interval
+		}
 	}
 }

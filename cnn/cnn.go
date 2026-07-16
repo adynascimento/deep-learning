@@ -24,7 +24,7 @@ type CNN interface {
 }
 
 type CNNModel interface {
-	Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, verbose bool) []float64
+	Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...func(*fitConfig)) []float64
 	Predict(x [][]*mat.Dense) *mat.Dense
 	Evaluate(x [][]*mat.Dense, y *mat.Dense) float64
 	Save(path string)
@@ -74,6 +74,11 @@ type cnnModel struct {
 type cnnForwardOutputs struct {
 	ConvOutputs map[string][][]*mat.Dense
 	PoolOutputs map[string][]*poolCache
+}
+
+type fitConfig struct {
+	Verbose     bool
+	LogInterval int
 }
 
 func NewConvNeuralNetwork(config CNNConfig) CNN {
@@ -169,6 +174,7 @@ func (c *cnn) NewTrainer(config TrainerConfig, options ...func(*cnnModel)) CNNMo
 		Optimizer:       config.Optimizer,
 		LearningRate:    config.LearningRate,
 		Epochs:          config.Epochs,
+		BatchSize:       32,
 	}
 
 	// apply additional options
@@ -292,23 +298,31 @@ func (cm *cnnModel) BackwardPropagation(Z, A map[string]*mat.Dense, yTrue *mat.D
 // yTrain is represented as an rows X cols matrix a where each
 // row is a variable and each column is an observation.
 // yTrain matrix shape (nFeatures, nSamples)
-func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, verbose bool) []float64 {
+func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...func(*fitConfig)) []float64 {
 	nSamples := len(xTrain)
-	if cm.BatchSize == 0 {
-		cm.BatchSize = nSamples
+
+	// default values
+	config := fitConfig{
+		Verbose:     true,
+		LogInterval: 1,
+	}
+
+	// apply additional options
+	for _, opt := range options {
+		opt(&config)
 	}
 
 	// keep track of the loss
 	losses := []float64{}
 
 	// loop
-	start := time.Now()
 	iterPerEpoch := int(math.Ceil(float64(nSamples) / float64(cm.BatchSize)))
 	for i := 1; i <= cm.Epochs; i++ {
-		lossBatches := []float64{}
+		start := time.Now()
 		weights := []float64{}
+		lossBatches := []float64{}
 
-		bar := progressBar(iterPerEpoch, fmt.Sprintf("epoch %5d/%d: ", i, cm.Epochs), verbose)
+		bar := progressBar(iterPerEpoch, fmt.Sprintf("epoch %5d/%d: ", i, cm.Epochs), config.Verbose)
 		for startIdx := 0; startIdx < nSamples; startIdx += cm.BatchSize {
 			bar.Add(1)
 			endIdx := startIdx + cm.BatchSize
@@ -333,10 +347,9 @@ func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, verbose bool) 
 
 		// print the loss every x iterations
 		meanLoss := stat.Mean(lossBatches, weights)
-		if verbose && i%(cm.Epochs/10) == 0 || verbose && i == 1 {
+		if config.Verbose && (i%config.LogInterval == 0 || i == 1 || i == cm.Epochs) {
 			fmt.Printf(" | t: %7.2fms | loss: %.6e | acc: %.4f \n",
 				float64(time.Since(start))/float64(time.Millisecond), meanLoss, cm.Evaluate(xTrain, yTrain))
-			start = time.Now()
 		}
 		losses = append(losses, meanLoss)
 	}
@@ -445,5 +458,19 @@ func WithBatchSize(batchSize int) func(*cnnModel) {
 func WithL2Regularization(lambd float64) func(*cnnModel) {
 	return func(nm *cnnModel) {
 		nm.L2Regularization = lambd
+	}
+}
+
+func WithVerbose(verbose bool) func(*fitConfig) {
+	return func(c *fitConfig) {
+		c.Verbose = verbose
+	}
+}
+
+func WithLogInterval(interval int) func(*fitConfig) {
+	return func(c *fitConfig) {
+		if interval > 0 {
+			c.LogInterval = interval
+		}
 	}
 }
