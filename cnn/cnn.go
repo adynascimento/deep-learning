@@ -243,6 +243,8 @@ func (cm *cnnModel) ForwardPropagation(x [][]*mat.Dense) (*mat.Dense, map[string
 
 // cnn backward propagation step
 func (cm *cnnModel) BackwardPropagation(Z, A map[string]*mat.Dense, yTrue *mat.Dense) {
+	nTraining := len(cm.ConvOutputs["convI1"])
+
 	// fully connected layer step
 	dOutDense := cm.DenseLayer.BackwardPropagation(Z, A, yTrue, cm.LearningRate, cm.L2Regularization)
 
@@ -265,14 +267,13 @@ func (cm *cnnModel) BackwardPropagation(Z, A map[string]*mat.Dense, yTrue *mat.D
 						dOut = cm.PoolLayers[i].BackwardPropagation(dOut, cm.PoolOutputs["pool"+strconv.Itoa(i+1)][t])
 					}
 					dOut = cm.ConvLayers[i].BackwardPropagation(cm.ConvOutputs["convI"+strconv.Itoa(i+1)][t],
-						cm.ConvOutputs["convZ"+strconv.Itoa(i+1)][t], dOut, &workerGradient[i])
+						cm.ConvOutputs["convZ"+strconv.Itoa(i+1)][t], dOut, &workerGradient[i], cm.L2Regularization/float64(nTraining))
 				}
 			}
 		}(grad)
 	}
 
 	// send workers
-	nTraining := len(cm.ConvOutputs["convI1"])
 	for t := 0; t < nTraining; t++ {
 		workers <- t
 	}

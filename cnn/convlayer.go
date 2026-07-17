@@ -204,7 +204,7 @@ func (cl *convLayer) ForwardPropagation(x []*mat.Dense) ([]*mat.Dense, []*mat.De
 // backward propagation step: reverse convolution operation
 // input x with shape (nChannels, hIn, wIn)
 // gradient dA with shape (nFilters, hOut, wOut)
-func (cl *convLayer) BackwardPropagation(x []*mat.Dense, Z, dA []*mat.Dense, workerGradient *gradients) []*mat.Dense {
+func (cl *convLayer) BackwardPropagation(x []*mat.Dense, Z, dA []*mat.Dense, workerGradient *gradients, lambd float64) []*mat.Dense {
 	stride := cl.Stride
 	nFilters := cl.NFilters
 
@@ -218,6 +218,7 @@ func (cl *convLayer) BackwardPropagation(x []*mat.Dense, Z, dA []*mat.Dense, wor
 	dZBig := mat.NewDense(nFilters, P, nil)
 
 	// compute dZ and stack all filter gradients into dZBig
+	// dA received from the dense layer is already scaled by 1./batchsize.
 	for f := 0; f < nFilters; f++ {
 		// apply gradient of activation function to dA: dZ[f] = dA[f] ⊙ activation'(Z[f])
 		dZ := ngo.Multiply(dA[f], cl.Activation.Derivative(Z[f]))
@@ -234,7 +235,7 @@ func (cl *convLayer) BackwardPropagation(x []*mat.Dense, Z, dA []*mat.Dense, wor
 	// propagate dZ to the filters W.
 	// equivalent to dW[f][c] = Convolve2D(x[c], dZs[f]), computed as one GEMM
 	// store the result in cl.Gradients.DW for all filters and channels.
-	cl.BackwardWeightGradients(x, dZBig, stride, workerGradient)
+	cl.BackwardWeightGradients(x, dZBig, stride, workerGradient, lambd)
 
 	// propagate dZ to the previous input x.
 	// equivalent to summing Convolve2D(Pad(dZs[f]), Rotate180(W[f][c])) over filters.
@@ -247,7 +248,7 @@ func (cl *convLayer) BackwardPropagation(x []*mat.Dense, Z, dA []*mat.Dense, wor
 // compute dW with the convolution gradients for W.
 // it is equivalent to: dW[f][c] = Convolve2D(x[c], dZs[f], stride),
 // computed in batch with im2col + GEMM for performance
-func (cl *convLayer) BackwardWeightGradients(x []*mat.Dense, dZBig *mat.Dense, stride int, workerGradient *gradients) {
+func (cl *convLayer) BackwardWeightGradients(x []*mat.Dense, dZBig *mat.Dense, stride int, workerGradient *gradients, lambd float64) {
 	nFilters := cl.NFilters
 	nChannels := cl.NChannels
 
@@ -288,8 +289,10 @@ func (cl *convLayer) BackwardWeightGradients(x []*mat.Dense, dZBig *mat.Dense, s
 			dst := workerGradient.DW[f][c].RawMatrix().Data
 			src := row[c*K : (c+1)*K] // block corresponding to channel c
 
+			wRaw := cl.Parameters.W[f][c].RawMatrix()
 			for i := range dst {
-				dst[i] += src[i]
+				// add L2 regularization based on the current weight
+				dst[i] += src[i] + lambd*wRaw.Data[i]
 			}
 		}
 	}
