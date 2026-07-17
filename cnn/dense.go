@@ -19,7 +19,7 @@ type denseLayer struct {
 
 func newDenseLayer(nnStructure []int, activation activation, outputActivation outputActivation, optType optimizerType) *denseLayer {
 	// initializing the model parameters
-	parameters := initializeParameters(nnStructure)
+	parameters := initializeDenseParameters(nnStructure, activation)
 
 	// choice of optimization algorithm
 	optimizer := denseOptimizerSettings[optType]
@@ -93,12 +93,25 @@ func (dl *denseLayer) BackwardPropagation(Z, A map[string]*mat.Dense, y *mat.Den
 }
 
 // initializing the model parameters
-func initializeParameters(nnStructure []int) map[string]*mat.Dense {
+func initializeDenseParameters(nnStructure []int, activation activation) map[string]*mat.Dense {
 	parameters := make(map[string]*mat.Dense) // map containing the parameters
 	L := len(nnStructure) - 1                 // number of layers
 
 	for l := 0; l < L; l++ {
-		scalar := math.Sqrt((6.0 / float64(nnStructure[l]+nnStructure[l+1]))) * 0.1
+		fanIn := nnStructure[l]
+		fanOut := nnStructure[l+1]
+
+		scalar := 1.0
+		if l == L-1 {
+			scalar = math.Sqrt(2.0 / float64(fanIn+fanOut)) // Xavier (Glorot)
+		} else {
+			switch activation.Name {
+			case ReLUActivation, EluActivation:
+				scalar = math.Sqrt(2.0 / float64(fanIn)) // He (Kaiming)
+			default: // tanh, sigmoid, softmax, linear...
+				scalar = math.Sqrt(2.0 / float64(fanIn+fanOut)) // Xavier (Glorot)
+			}
+		}
 
 		parameters["W"+strconv.Itoa(l+1)] = ngo.Scale(scalar, ngo.Randn(nnStructure[l+1], nnStructure[l]))
 		parameters["b"+strconv.Itoa(l+1)] = mat.NewDense(nnStructure[l+1], 1, nil)

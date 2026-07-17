@@ -1,6 +1,8 @@
 package cnn
 
 import (
+	"math"
+
 	"github.com/adynascimento/deep-learning/ngo"
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"
@@ -46,13 +48,7 @@ func newConvLayer(nFilters, filterSize, stride int, activation activation, optTy
 
 	// initialize convolutional neural network
 	// filters with shape (nFilters, nChannels, filterSize, filterSize)
-	filters := make([][]*mat.Dense, nFilters)
-	for i := range filters {
-		filters[i] = make([]*mat.Dense, nChannels)
-		for j := range filters[i] {
-			filters[i][j] = ngo.Randn(filterSize, filterSize)
-		}
-	}
+	filters := initializeConvParameters(nFilters, nChannels, filterSize, activation)
 
 	// K is the number of weights per input channel
 	K := filterSize * filterSize
@@ -98,6 +94,31 @@ func newConvLayer(nFilters, filterSize, stride int, activation activation, optTy
 		Stride:     stride,
 		Iter:       1,
 	}
+}
+
+func initializeConvParameters(nFilters, nChannels, filterSize int, activation activation) [][]*mat.Dense {
+	fanIn := nChannels * filterSize * filterSize
+	fanOut := nFilters * filterSize * filterSize
+
+	scalar := 1.0
+	switch activation.Name {
+	case ReLUActivation, EluActivation:
+		scalar = math.Sqrt(2.0 / float64(fanIn)) // He (Kaiming)
+	default: // tanh, sigmoid, softmax, linear...
+		scalar = math.Sqrt(2.0 / float64(fanIn+fanOut)) // Xavier (Glorot)
+	}
+
+	// initialize convolutional neural network
+	// filters with shape (nFilters, nChannels, filterSize, filterSize)
+	filters := make([][]*mat.Dense, nFilters)
+	for i := range filters {
+		filters[i] = make([]*mat.Dense, nChannels)
+		for j := range filters[i] {
+			filters[i][j] = ngo.Scale(scalar, ngo.Randn(filterSize, filterSize))
+		}
+	}
+
+	return filters
 }
 
 func newGradients(nFilters, nChannels, filterSize int) gradients {

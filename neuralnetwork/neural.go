@@ -65,18 +65,18 @@ type fitConfig struct {
 
 func NewNeuralNetwork(config NeuralConfig) NeuralNetwork {
 	// choice of activation function
-	activationFunction := activationSettings[config.Activation]
+	activation := activationSettings[config.Activation]
 
 	// choice of output layer activation function and loss function
 	lossFunction := modeSettings[config.Mode].lossFunction
 	outputActivationFunction := modeSettings[config.Mode].outputActivation
 
 	// initializing the model parameters
-	parameters := initializeParameters(config.NNStructure)
+	parameters := initializeParameters(config.NNStructure, activation)
 
 	return &neuralNetwork{
 		NNStructure:      config.NNStructure,
-		Activation:       activationFunction,
+		Activation:       activation,
 		Mode:             config.Mode,
 		OutputActivation: outputActivationFunction,
 		LossFunction:     lossFunction,
@@ -291,12 +291,25 @@ func (nm *neuralModel) Summary() {
 }
 
 // initializing the model parameters
-func initializeParameters(nnStructure []int) map[string]*mat.Dense {
+func initializeParameters(nnStructure []int, activation activation) map[string]*mat.Dense {
 	parameters := make(map[string]*mat.Dense) // map containing the parameters
 	L := len(nnStructure) - 1                 // number of layers
 
 	for l := 0; l < L; l++ {
-		scalar := math.Sqrt((6.0 / float64(nnStructure[l]+nnStructure[l+1])))
+		fanIn := nnStructure[l]
+		fanOut := nnStructure[l+1]
+
+		scalar := 1.0
+		if l == L-1 {
+			scalar = math.Sqrt(2.0 / float64(fanIn+fanOut)) // Xavier (Glorot)
+		} else {
+			switch activation.Name {
+			case ReLUActivation, EluActivation:
+				scalar = math.Sqrt(2.0 / float64(fanIn)) // He (Kaiming)
+			default: // tanh, sigmoid, softmax, linear...
+				scalar = math.Sqrt(2.0 / float64(fanIn+fanOut)) // Xavier (Glorot)
+			}
+		}
 
 		parameters["W"+strconv.Itoa(l+1)] = ngo.Scale(scalar, ngo.Randn(nnStructure[l+1], nnStructure[l]))
 		parameters["b"+strconv.Itoa(l+1)] = mat.NewDense(nnStructure[l+1], 1, nil)
