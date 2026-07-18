@@ -24,6 +24,10 @@ type CNN interface {
 }
 
 type CNNModel interface {
+	// performs model training using the xTrain and yTrain datasets.
+	// xTrain is a 4D tensor with shape (nTraining, nChannels, hIn, wIn).
+	// yTrain is a matrix with shape (nFeatures, nSamples), where each row
+	// corresponds to a feature and each column corresponds to a training sample.
 	Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...func(*fitConfig)) []float64
 	Predict(x [][]*mat.Dense) *mat.Dense
 	Evaluate(x [][]*mat.Dense, y *mat.Dense) float64
@@ -294,11 +298,10 @@ func (cm *cnnModel) BackwardPropagation(Z, A map[string]*mat.Dense, yTrue *mat.D
 	}
 }
 
-// performs model training with the xTrain and yTrain matrices,
-// xTrain is represented with shape (nTraining, nChannels, hIn, wIn)
-// yTrain is represented as an rows X cols matrix a where each
-// row is a variable and each column is an observation.
-// yTrain matrix shape (nFeatures, nSamples)
+// performs model training using the xTrain and yTrain datasets.
+// xTrain is a 4D tensor with shape (nTraining, nChannels, hIn, wIn).
+// yTrain is a matrix with shape (nFeatures, nSamples), where each row
+// corresponds to a feature and each column corresponds to a training sample.
 func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...func(*fitConfig)) []float64 {
 	nSamples := len(xTrain)
 

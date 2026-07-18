@@ -21,6 +21,9 @@ type NeuralNetwork interface {
 }
 
 type NeuralModel interface {
+	// performs model training using the xTrain and yTrain matrices.
+	// both matrices have shape (nFeatures, nSamples), where each row
+	// corresponds to a feature and each column corresponds to a training sample.
 	Fit(xTrain *mat.Dense, yTrain *mat.Dense, options ...func(*fitConfig)) []float64
 	Predict(x *mat.Dense) *mat.Dense
 	Evaluate(x *mat.Dense, y *mat.Dense) float64
@@ -158,10 +161,9 @@ func (nm *neuralModel) BackwardPropagation(Z, A map[string]*mat.Dense, y *mat.De
 	return dW, db
 }
 
-// performs model training with the xTrain and yTrain matrices,
-// which is represented as an rows X cols matrix a where each
-// row is a variable and each column is an observation.
-// matrix shape (nFeatures, nSamples)
+// performs model training using the xTrain and yTrain matrices.
+// both matrices have shape (nFeatures, nSamples), where each row
+// corresponds to a feature and each column corresponds to a training sample.
 func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig)) []float64 {
 	nSamples := xTrain.RawMatrix().Cols
 
