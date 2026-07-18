@@ -32,7 +32,7 @@ func main() {
 			network.WithBatchSize(32),
 			network.WithL2Regularization(params.L2Regularization),
 		)
-		model.Fit(xTrain, yTrain, false)
+		model.Fit(xTrain, yTrain, network.WithVerbose(false))
 		model.Save("./trials/networkmodel" + strconv.Itoa(trialID) + ".json")
 
 		// make predictions and evaluate model

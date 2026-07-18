@@ -69,7 +69,7 @@ func main() {
 		cnn.WithBatchSize(32),
 	)
 	model.Summary()
-	model.Fit(xTrain, yTrain, true)
+	model.Fit(xTrain, yTrain)
 
 	// accuracy of the model making predictions
 	fmt.Printf("accuracy of training data: %.4f \n", model.Evaluate(xTrain, yTrain))

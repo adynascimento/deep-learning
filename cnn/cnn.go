@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"runtime"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/olekukonko/tablewriter"
@@ -22,7 +24,11 @@ type CNN interface {
 }
 
 type CNNModel interface {
-	Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, verbose bool) []float64
+	// performs model training using the xTrain and yTrain datasets.
+	// xTrain is a 4D tensor with shape (nTraining, nChannels, hIn, wIn).
+	// yTrain is a matrix with shape (nFeatures, nSamples), where each row
+	// corresponds to a feature and each column corresponds to a training sample.
+	Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...func(*fitConfig)) []float64
 	Predict(x [][]*mat.Dense) *mat.Dense
 	Evaluate(x [][]*mat.Dense, y *mat.Dense) float64
 	Save(path string)
@@ -59,11 +65,24 @@ type cnn struct {
 
 type cnnModel struct {
 	*cnn
+	*cnnForwardOutputs
+	NWorkers         int
+	WorkerGradients  [][]gradients
 	Optimizer        optimizerType
 	LearningRate     float64
 	L2Regularization float64
 	Epochs           int
 	BatchSize        int
+}
+
+type cnnForwardOutputs struct {
+	ConvOutputs map[string][][]*mat.Dense
+	PoolOutputs map[string][]*poolCache
+}
+
+type fitConfig struct {
+	Verbose     bool
+	LogInterval int
 }
 
 func NewConvNeuralNetwork(config CNNConfig) CNN {
@@ -128,14 +147,38 @@ func (c *cnn) NewTrainer(config TrainerConfig, options ...func(*cnnModel)) CNNMo
 		c.ConvLayers = append(c.ConvLayers, convLayer)
 	}
 
+	// add flatten layer
+	c.FlattenLayer = newFlatten()
+
 	// add fully connected layer
 	c.DenseLayer = newDenseLayer(c.DenseLayerStructure, c.Activation, c.OutputActivation, config.Optimizer)
 
+	// each worker accumulates its own local gradients in the backward propagation
+	// for a subset of the training samples before the final gradient reduction
+	nWorkers := runtime.GOMAXPROCS(0)
+	workerGradients := make([][]gradients, nWorkers)
+	for w := 0; w < nWorkers; w++ {
+		workerGradients[w] = make([]gradients, len(c.ConvLayers))
+		for i := range c.ConvLayers {
+			layer := c.ConvLayers[i]
+
+			// initialize worker gradients
+			workerGradients[w][i] = newGradients(layer.NFilters, layer.NChannels, layer.FilterSize)
+		}
+	}
+
 	model := cnnModel{
-		cnn:          c,
-		Optimizer:    config.Optimizer,
-		LearningRate: config.LearningRate,
-		Epochs:       config.Epochs,
+		cnn: c,
+		cnnForwardOutputs: &cnnForwardOutputs{
+			ConvOutputs: make(map[string][][]*mat.Dense),
+			PoolOutputs: make(map[string][]*poolCache),
+		},
+		NWorkers:        nWorkers,
+		WorkerGradients: workerGradients,
+		Optimizer:       config.Optimizer,
+		LearningRate:    config.LearningRate,
+		Epochs:          config.Epochs,
+		BatchSize:       32,
 	}
 
 	// apply additional options
@@ -147,92 +190,143 @@ func (c *cnn) NewTrainer(config TrainerConfig, options ...func(*cnnModel)) CNNMo
 }
 
 // cnn forward propagation step
-func (cm *cnnModel) ForwardPropagation(x [][]*mat.Dense) (*mat.Dense, map[string][][]*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense) {
+func (cm *cnnModel) ForwardPropagation(x [][]*mat.Dense) (*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense) {
 	nTraining := len(x)
 
-	convOutputs := make(map[string][][]*mat.Dense)
 	for i := range cm.ConvLayers {
-		convOutputs["convI"+strconv.Itoa(i+1)] = make([][]*mat.Dense, nTraining)
-		convOutputs["convZ"+strconv.Itoa(i+1)] = make([][]*mat.Dense, nTraining)
-		convOutputs["convA"+strconv.Itoa(i+1)] = make([][]*mat.Dense, nTraining)
+		cm.ConvOutputs["convI"+strconv.Itoa(i+1)] = make([][]*mat.Dense, nTraining)
+		cm.ConvOutputs["convZ"+strconv.Itoa(i+1)] = make([][]*mat.Dense, nTraining)
 	}
+
+	for i := range cm.PoolLayers {
+		cm.PoolOutputs["pool"+strconv.Itoa(i+1)] = make([]*poolCache, nTraining)
+	}
+
+	var wg sync.WaitGroup
+	workers := make(chan int, cm.NWorkers)
 
 	// convolutional and pooling steps
 	poolOut := make([][]*mat.Dense, nTraining)
-	for t := 0; t < nTraining; t++ {
-		out := x[t]
-		for i := range cm.ConvLayers {
-			convOutputs["convI"+strconv.Itoa(i+1)][t] = out
-			convOutputs["convZ"+strconv.Itoa(i+1)][t], out = cm.ConvLayers[i].ForwardPropagation(out)
-			convOutputs["convA"+strconv.Itoa(i+1)][t] = out
-			if i < len(cm.PoolLayers) {
-				out = cm.PoolLayers[i].ForwardPropagation(out)
+	for w := 0; w < cm.NWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for t := range workers {
+				out := x[t]
+				for i := range cm.ConvLayers {
+					cm.ConvOutputs["convI"+strconv.Itoa(i+1)][t] = out
+					cm.ConvOutputs["convZ"+strconv.Itoa(i+1)][t], out = cm.ConvLayers[i].ForwardPropagation(out)
+					if i < len(cm.PoolLayers) {
+						out, cm.PoolOutputs["pool"+strconv.Itoa(i+1)][t] = cm.PoolLayers[i].ForwardPropagation(out)
+					}
+				}
+				poolOut[t] = out
 			}
-		}
-
-		poolOut[t] = out
+		}()
 	}
 
+	// send workers
+	for t := 0; t < nTraining; t++ {
+		workers <- t
+	}
+	close(workers)
+
+	// wait for all workers to finish
+	wg.Wait()
+
 	// flatten step
-	cm.FlattenLayer = newFlatten()
+	// input dimension features (pool layer output)
 	flattened := cm.FlattenLayer.ForwardPropagation(poolOut)
 
 	// fully connected layer step
 	// input dimension features (flatten layer output)
 	yPred, Z, A := cm.DenseLayer.ForwardPropagation(flattened)
 
-	return yPred, convOutputs, Z, A
+	return yPred, Z, A
 }
 
 // cnn backward propagation step
-func (cm *cnnModel) BackwardPropagation(convOutputs map[string][][]*mat.Dense, Z, A map[string]*mat.Dense, yTrue *mat.Dense) {
+func (cm *cnnModel) BackwardPropagation(Z, A map[string]*mat.Dense, yTrue *mat.Dense) {
+	nTraining := len(cm.ConvOutputs["convI1"])
+
 	// fully connected layer step
 	dOutDense := cm.DenseLayer.BackwardPropagation(Z, A, yTrue, cm.LearningRate, cm.L2Regularization)
 
 	// flatten step
 	dOutFlatten := cm.FlattenLayer.BackwardPropagation(dOutDense)
 
+	var wg sync.WaitGroup
+	workers := make(chan int, cm.NWorkers)
+
 	// pooling and convolutional steps
-	nTraining := len(convOutputs["convI1"])
-	for t := 0; t < nTraining; t++ {
-		dOut := dOutFlatten[t]
-		for i := len(cm.ConvLayers) - 1; i >= 0; i-- {
-			if i < len(cm.PoolLayers) {
-				dOut = cm.PoolLayers[i].BackwardPropagation(convOutputs["convA"+strconv.Itoa(i+1)][t], dOut)
+	for w := 0; w < cm.NWorkers; w++ {
+		grad := cm.WorkerGradients[w]
+		wg.Add(1)
+		go func(workerGradient []gradients) {
+			defer wg.Done()
+			for t := range workers {
+				dOut := dOutFlatten[t]
+				for i := len(cm.ConvLayers) - 1; i >= 0; i-- {
+					if i < len(cm.PoolLayers) {
+						dOut = cm.PoolLayers[i].BackwardPropagation(dOut, cm.PoolOutputs["pool"+strconv.Itoa(i+1)][t])
+					}
+					dOut = cm.ConvLayers[i].BackwardPropagation(cm.ConvOutputs["convI"+strconv.Itoa(i+1)][t],
+						cm.ConvOutputs["convZ"+strconv.Itoa(i+1)][t], dOut, &workerGradient[i], cm.L2Regularization/float64(nTraining))
+				}
 			}
-			dOut = cm.ConvLayers[i].BackwardPropagation(convOutputs["convI"+strconv.Itoa(i+1)][t],
-				convOutputs["convZ"+strconv.Itoa(i+1)][t], dOut)
-		}
+		}(grad)
 	}
+
+	// send workers
+	for t := 0; t < nTraining; t++ {
+		workers <- t
+	}
+	close(workers)
+
+	// wait for all workers to finish
+	wg.Wait()
 
 	// update convlayers parameters (optimization algorithm)
 	for i := len(cm.ConvLayers) - 1; i >= 0; i-- {
+		workerGradients := make([]gradients, cm.NWorkers)
+		for w := 0; w < cm.NWorkers; w++ {
+			workerGradients[w] = cm.WorkerGradients[w][i]
+		}
+
+		cm.ConvLayers[i].ReduceWorkerGradients(workerGradients)
 		cm.ConvLayers[i].UpdateParameters(cm.LearningRate)
 	}
 }
 
-// performs model training with the xTrain and yTrain matrices,
-// xTrain is represented with shape (nTraining, nChannels, hIn, wIn)
-// yTrain is represented as an rows X cols matrix a where each
-// row is a variable and each column is an observation.
-// yTrain matrix shape (nFeatures, nSamples)
-func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, verbose bool) []float64 {
+// performs model training using the xTrain and yTrain datasets.
+// xTrain is a 4D tensor with shape (nTraining, nChannels, hIn, wIn).
+// yTrain is a matrix with shape (nFeatures, nSamples), where each row
+// corresponds to a feature and each column corresponds to a training sample.
+func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...func(*fitConfig)) []float64 {
 	nSamples := len(xTrain)
-	if cm.BatchSize == 0 {
-		cm.BatchSize = nSamples
+
+	// default values
+	config := fitConfig{
+		Verbose:     true,
+		LogInterval: 1,
+	}
+
+	// apply additional options
+	for _, opt := range options {
+		opt(&config)
 	}
 
 	// keep track of the loss
 	losses := []float64{}
 
 	// loop
-	start := time.Now()
 	iterPerEpoch := int(math.Ceil(float64(nSamples) / float64(cm.BatchSize)))
 	for i := 1; i <= cm.Epochs; i++ {
-		lossBatches := []float64{}
+		start := time.Now()
 		weights := []float64{}
+		lossBatches := []float64{}
 
-		bar := progressBar(iterPerEpoch, fmt.Sprintf("epoch %5d/%d: ", i, cm.Epochs), verbose)
+		bar := progressBar(iterPerEpoch, fmt.Sprintf("epoch %5d/%d: ", i, cm.Epochs), config.Verbose)
 		for startIdx := 0; startIdx < nSamples; startIdx += cm.BatchSize {
 			bar.Add(1)
 			endIdx := startIdx + cm.BatchSize
@@ -244,7 +338,7 @@ func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, verbose bool) 
 			yBatch := yTrain.Slice(0, yTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)
 
 			// forward propagation
-			yPred, convOutputs, Z, A := cm.ForwardPropagation(xBatch)
+			yPred, Z, A := cm.ForwardPropagation(xBatch)
 
 			// loss function
 			loss := cm.LossFunction(yPred, yBatch, cm.DenseLayer.Parameters, cm.L2Regularization)
@@ -252,14 +346,14 @@ func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, verbose bool) 
 			weights = append(weights, float64(len(xBatch)))
 
 			// backward propagation with update parameters (optimization algorithm)
-			cm.BackwardPropagation(convOutputs, Z, A, yBatch)
+			cm.BackwardPropagation(Z, A, yBatch)
 		}
 
 		// print the loss every x iterations
 		meanLoss := stat.Mean(lossBatches, weights)
-		if verbose && i%(cm.Epochs/10) == 0 || verbose && i == 1 {
-			fmt.Printf(" | t: %7.2fs | loss: %.6e | acc: %.4f \n",
-				time.Since(start).Seconds(), meanLoss, cm.Evaluate(xTrain, yTrain))
+		if config.Verbose && (i%config.LogInterval == 0 || i == 1 || i == cm.Epochs) {
+			fmt.Printf(" | t: %7.2fms | loss: %.6e | acc: %.4f \n",
+				float64(time.Since(start))/float64(time.Millisecond), meanLoss, cm.Evaluate(xTrain, yTrain))
 		}
 		losses = append(losses, meanLoss)
 	}
@@ -269,7 +363,7 @@ func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, verbose bool) 
 
 // predictions with forward propagation
 func (cm *cnnModel) Predict(x [][]*mat.Dense) *mat.Dense {
-	predictions, _, _, _ := cm.ForwardPropagation(x)
+	predictions, _, _ := cm.ForwardPropagation(x)
 	return predictions
 }
 
@@ -368,5 +462,19 @@ func WithBatchSize(batchSize int) func(*cnnModel) {
 func WithL2Regularization(lambd float64) func(*cnnModel) {
 	return func(nm *cnnModel) {
 		nm.L2Regularization = lambd
+	}
+}
+
+func WithVerbose(verbose bool) func(*fitConfig) {
+	return func(c *fitConfig) {
+		c.Verbose = verbose
+	}
+}
+
+func WithLogInterval(interval int) func(*fitConfig) {
+	return func(c *fitConfig) {
+		if interval > 0 {
+			c.LogInterval = interval
+		}
 	}
 }

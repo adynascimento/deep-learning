@@ -1,6 +1,6 @@
 # Deep Feedforward Neural Network (DNN) Code from Scratch Using Golang
 
-A comprehensive deep learning library written in Go from scratch, featuring support for Artificial Neural Networks (ANN), Convolutional Neural Networks (CNN), Hyperparameter Optimization, and Natural Language Processing (NLP).
+A comprehensive deep learning library written in Go from scratch, featuring support for Artificial Neural Networks (ANN), Convolutional Neural Networks (CNN), Hyperparameter Optimization, Mathematical Utilities and Natural Language Processing (NLP).
 
 ## 📋 Features
 
@@ -17,7 +17,8 @@ A comprehensive deep learning library written in Go from scratch, featuring supp
 
 ### 🖼️ Convolutional Neural Networks (CNN)
 - 2D convolutional layers with customizable filters
-- **ConvolveFFT2D**: Fast Fourier Transform-based convolution for optimized performance
+- Optimized convolution using Im2Col + GEMM
+- FFT-based convolution available for large kernels
 - Max Pooling layers
 - Flatten layer for transition to dense layers
 - Support for multiclass and multilabel classification modes
@@ -53,6 +54,18 @@ A comprehensive deep learning library written in Go from scratch, featuring supp
 - Model saving and loading in JSON format
 - Large-scale dataset support
 - Model summary generation
+
+## ✨ Highlights
+
+- ✔ Written entirely in Go
+- ✔ BLAS-accelerated matrix operations (Gonum)
+- ✔ Optimized convolution using Im2Col + GEMM
+- ✔ Hyperparameter optimization
+- ✔ Multi-channel image support
+- ✔ Model serialization
+- ✔ Natural Language Processing utilities
+- ✔ Mathematical utilities (PCA, StandardScaler, Sampling Functions)
+- ✔ Batch training
 
 ## 🎯 Usage Examples
 
@@ -91,7 +104,7 @@ func main() {
 		Epochs:       10000},
 		network.WithL2Regularization(1.40e-06))
 	
-	model.Fit(xTrain, yTrain, true)
+	model.Fit(xTrain, yTrain)
 	model.Save("networkmodel.json")
 
 	// make predictions
@@ -145,7 +158,7 @@ func main() {
 		network.WithL2Regularization(1.40e-06))
 	
 	model.Summary()
-	model.Fit(xTrain, yTrain, true)
+	model.Fit(xTrain, yTrain)
 	model.Save("networkmodel.json")
 
 	// evaluate
@@ -221,7 +234,7 @@ func main() {
 		cnn.WithL2Regularization(1.40e-06))
 	
 	model.Summary()
-	model.Fit(xTrain, yTrain, true)
+	model.Fit(xTrain, yTrain)
 	model.Save("networkmodel.json")
 
 	// evaluate
@@ -234,58 +247,7 @@ func main() {
 
 ---
 
-### 4. Multilabel Classification (Multiple Labels)
-
-```go
-// examples/multilabel/multilabel.go
-package main
-
-import (
-	"fmt"
-	network "github.com/adynascimento/deep-learning/neuralnetwork"
-	"github.com/adynascimento/deep-learning/ngo"
-	"github.com/adynascimento/deep-learning/nlp"
-)
-
-func main() {
-	// data with multiple labels per sample
-	data := LoadTextsFromFile("../dataset/multilabel/texts.csv")
-	dataLabel := LoadDataFromFile("../dataset/multilabel/texts_label.csv")
-
-	vectorizer := nlp.NewCountVectorizer(3000)
-	countMatrix := vectorizer.FitTransform(data...)
-
-	xTrain, xTest := ngo.Split(countMatrix, 0.75)
-	yTrain, yTest := ngo.Split(dataLabel, 0.75)
-
-	inputDim := xTrain.RawMatrix().Rows
-	outputDim := yTrain.RawMatrix().Rows
-
-	// create multilabel model
-	neural := network.NewNeuralNetwork(network.NeuralConfig{
-		NNStructure: []int{inputDim, 64, 32, outputDim},
-		Activation:  network.ReLUActivation,
-		Mode:        network.ModeMultiLabel,
-	})
-
-	// train
-	model := neural.NewTrainer(network.TrainerConfig{
-		Optimizer:    network.AdamOptimizer,
-		LearningRate: 0.01,
-		Epochs:       100},
-		network.WithBatchSize(16))
-	
-	model.Fit(xTrain, yTrain, true)
-	fmt.Printf("training accuracy: %.4f\n", model.Evaluate(xTrain, yTrain))
-	fmt.Printf("testing accuracy:  %.4f\n", model.Evaluate(xTest, yTest))
-}
-```
-
-**Use case**: Image tagging, multi-topic text classification, medical diagnosis with multiple conditions.
-
----
-
-### 5. Hyperparameter Optimization
+### 4. Hyperparameter Optimization
 
 ```go
 // examples/hyperopt/hyperopt.go
@@ -293,29 +255,50 @@ package main
 
 import (
 	"fmt"
+	"strconv"
+
 	"github.com/adynascimento/deep-learning/hyperopt"
+	network "github.com/adynascimento/deep-learning/neuralnetwork"
+	"github.com/adynascimento/deep-learning/ngo"
 )
 
 func main() {
 	// define search space
 	space := hyperopt.SearchSpace{
-		InputDim:          784,
-		OutputDim:         10,
-		NLayersRange:      []int{2, 3, 4},
-		NHiddenRange:      []int{32, 64, 128},
-		LearningRateRange: []float64{0.001, 0.01, 0.1},
-		LambdRange:        []float64{0, 1e-6, 1e-4},
-		NModels:           10,
-	}
+			InputDim:          xTrain.RawMatrix().Rows,
+			OutputDim:         yTrain.RawMatrix().Rows,
+			NLayersRange:      []int{3, 5},           // minimum and maximum number of layers
+			NHiddenRange:      []int{50, 100},        // minimum and maximum number of hidden units per layer
+			LearningRateRange: []float64{1e-4, 1e-2}, // minimum and maximum of learning rate
+			LambdRange:        []float64{1e-6, 1e-2}, // minimum and maximum of regularization parameter
+			NModels:           3,                     // number of models
+		})
 
 	// create optimizer
 	hp := hyperopt.NewHyperparameterOptimization(space)
 
 	// define objective function
-	objective := func(trial int, params hyperopt.Params) float64 {
-		// train model with these parameters
-		// return metric (e.g., accuracy)
-		return trainModel(params)
+	objective := func(trialID int, params hyperopt.Params) float64 {
+		// neural network model
+		neural := network.NewNeuralNetwork(network.NeuralConfig{
+			NNStructure: params.NNStructure,     // neural network structure
+			Activation:  network.TanhActivation, // activation function
+			Mode:        network.ModeMultiClass, // mode determines output layer activation and loss function
+		})
+
+		// optimizer to train the model
+		model := neural.NewTrainer(network.TrainerConfig{
+			Optimizer:    network.AdamOptimizer, // optimizer
+			LearningRate: params.LearningRate,   // learning rate
+			Epochs:       400},                  // number of iterations
+			network.WithBatchSize(32),
+			network.WithL2Regularization(params.L2Regularization),
+		)
+		model.Fit(xTrain, yTrain, network.WithVerbose(false))
+		model.Save("./trials/networkmodel" + strconv.Itoa(trialID) + ".json")
+
+		// make predictions and evaluate model
+		return model.Evaluate(xTrain, yTrain)
 	}
 
     // bayesian optimization
@@ -334,7 +317,7 @@ func main() {
 
 ---
 
-### 6. Data Scaling and Dimensionality Reduction
+### 5. Data Scaling and Dimensionality Reduction
 
 ```go
 // feature standardization with StandardScaler
@@ -401,110 +384,7 @@ func main() {
 
 ---
 
-### 7. CNN with Multi-channel Images (RGB)
-
-```go
-// examples/cnn/cats-vs-dogs/multilabel.go
-package main
-
-import (
-	"fmt"
-	"github.com/adynascimento/deep-learning/cnn"
-	"github.com/adynascimento/deep-learning/ngo"
-	"gonum.org/v1/gonum/mat"
-)
-
-func main() {
-	// load RGB image data
-	x := LoadDataFromFile("../../dataset/cats-vs-dogs/train_x.csv")
-	v := LoadDataFromFile("../../dataset/cats-vs-dogs/test_x.csv")
-	
-	// normalize pixel values
-	applyNormalization := func(_, _ int, v float64) float64 { 
-		return v / 255.0 
-	}
-	x = ngo.Apply(applyNormalization, x)
-	v = ngo.Apply(applyNormalization, v)
-
-	// convert flattened data to 3-channel (RGB) image format
-	xTrain := make([][]*mat.Dense, x.RawMatrix().Cols)
-	for n := range xTrain {
-		data := mat.Col(nil, n, x)
-		
-		// reshape into RGB channels
-		rgb := make([][]float64, 3) // 3 channels: R, G, B
-		for idx := 0; idx < len(data); idx += 3 {
-			rgb[0] = append(rgb[0], data[idx])     // red channel
-			rgb[1] = append(rgb[1], data[idx+1])   // green channel
-			rgb[2] = append(rgb[2], data[idx+2])   // blue channel
-		}
-		
-		xTrain[n] = make([]*mat.Dense, 3)
-		xTrain[n][0] = mat.NewDense(100, 100, rgb[0])
-		xTrain[n][1] = mat.NewDense(100, 100, rgb[1])
-		xTrain[n][2] = mat.NewDense(100, 100, rgb[2])
-	}
-
-	xTest := make([][]*mat.Dense, v.RawMatrix().Cols)
-	for n := range xTest {
-		data := mat.Col(nil, n, v)
-
-		// reshape into RGB channels
-		rgb := make([][]float64, 3) // 3 channels: R, G, B
-		for idx := 0; idx < len(data); idx += 3 {
-			rgb[0] = append(rgb[0], data[idx])     // red channel
-			rgb[1] = append(rgb[1], data[idx+1])   // green channel
-			rgb[2] = append(rgb[2], data[idx+2])   // blue channel
-		}
-
-		xTest[n] = make([]*mat.Dense, 3)
-		xTest[n][0] = mat.NewDense(100, 100, rgb[0])
-		xTest[n][1] = mat.NewDense(100, 100, rgb[1])
-		xTest[n][2] = mat.NewDense(100, 100, rgb[2])
-	}
-
-	yTrain := LoadDataFromFile("../../dataset/cats-vs-dogs/train_label.csv")
-	yTest := LoadDataFromFile("../../dataset/cats-vs-dogs/test_label.csv")
-
-	// create CNN for 3-channel (RGB) images
-	neural := cnn.NewConvNeuralNetwork(cnn.CNNConfig{
-		InputShape: [3]int{3, 100, 100}, // 3 RGB channels, 100x100 images
-		Activation: cnn.ReLUActivation,
-		Mode:       cnn.ModeMultiLabel,
-	})
-
-	// build architecture optimized for color images
-	neural.AddConv2DLayer(32, 3, 1)      // 32 filters 3x3
-	neural.AddMaxPooling2DLayer(2, 2)    // max pooling 2x2
-	neural.AddConv2DLayer(64, 3, 1)      // 64 filters 3x3
-	neural.AddMaxPooling2DLayer(2, 2)    // max pooling 2x2
-	neural.AddConv2DLayer(128, 3, 1)     // 128 filters 3x3
-	neural.AddMaxPooling2DLayer(2, 2)    // max pooling 2x2
-	neural.AddDenseLayer([]int{256, yTrain.RawMatrix().Rows})
-
-	// train with color images
-	model := neural.NewTrainer(cnn.TrainerConfig{
-		Optimizer:    cnn.AdamOptimizer,
-		LearningRate: 0.001,
-		Epochs:       50},
-		cnn.WithBatchSize(32),
-		cnn.WithL2Regularization(1e-5))
-	
-	model.Summary()
-	model.Fit(xTrain, yTrain, true)
-	model.Save("networkmodel.json")
-
-	// evaluate
-	fmt.Printf("training accuracy: %.4f\n", model.Evaluate(xTrain, yTrain))
-	fmt.Printf("testing accuracy:  %.4f\n", model.Evaluate(xTest, yTest))
-}
-```
-
-**Use case**: Real-world image classification with color images, animals classification, scene recognition.
-
----
-
-### 8. Natural Language Processing
+### 6. Natural Language Processing
 
 ```go
 // example using NLP
@@ -622,27 +502,6 @@ go run regression.go
 
 ---
 
-## 🚀 Advanced Features
-
-### ConvolveFFT2D: Fast Fourier Transform Convolution
-
-For large filters or high-dimensional convolutions, the library provides FFT-based convolution for superior performance:
-
-```go
-package cnn
-
-// automatically optimized FFT-based convolution
-// ideal for large filters (> 7x7) or performance-critical applications
-// uses Gonum's FFT implementation for efficient computation
-func ConvolveFFT2D(x, filter *mat.Dense, stride int) *mat.Dense {
-	// ... FFT implementation
-}
-```
-
-**When to use**: Large convolutional filters, high-resolution images, performance optimization in production.
-
----
-
 ### Hyperparameter Sampling Functions
 
 For intelligent hyperparameter exploration:
@@ -705,14 +564,14 @@ model := neural.NewTrainer(config,
 
 ### Saving and Loading Models
 ```go
-// save
-model.Save("my_model.json")
+// save an ANN model
+model.Save("ann_model.json")
 
 // load an ANN model
-loadedANN := network.Load("my_model.json")
+loadedANN := network.Load("ann_model.json")
 
 // load a CNN model
-loadedCNN := cnn.Load("my_cnn_model.json")
+loadedCNN := cnn.Load("cnn_model.json")
 ```
 
 ---
@@ -731,7 +590,7 @@ loadedCNN := cnn.Load("my_cnn_model.json")
 
 ## 📝 License
 
-This project is licensed under the MIT License. See the LICENSE file for details. All computational code follows standard open-source practices and is provided as-is.
+This project is licensed under the MIT License. See the [MIT LICENSE](LICENSE) file for details.
 
 ---
 

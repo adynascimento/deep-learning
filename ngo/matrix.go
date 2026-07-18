@@ -60,27 +60,30 @@ func Sum(a *mat.Dense, direction directionType) *mat.Dense {
 
 // add "a" matrix with "b" column vector row-wise
 func AddMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
-	m := new(mat.Dense)
-	fn := func(row, _ int, v float64) float64 { return v + b.At(row, 0) }
-	m.Apply(fn, a)
+	m := mat.DenseCopyOf(a)
+	for i := range m.RawMatrix().Rows {
+		floats.AddConst(b.At(i, 0), m.RawRowView(i))
+	}
 
 	return m
 }
 
 // multiply "a" matrix with "b" column vector row-wise
-func MulMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
-	m := new(mat.Dense)
-	fn := func(row, _ int, v float64) float64 { return v * b.At(row, 0) }
-	m.Apply(fn, a)
+func MulMatrixVector(a, b *mat.Dense) *mat.Dense {
+	m := mat.DenseCopyOf(a)
+	for i := range m.RawMatrix().Rows {
+		floats.Scale(b.At(i, 0), m.RawRowView(i))
+	}
 
 	return m
 }
 
 // division "a" matrix with "b" row vector column-wise
 func DivMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
-	m := new(mat.Dense)
-	fn := func(_, col int, v float64) float64 { return v / b.At(0, col) }
-	m.Apply(fn, a)
+	m := mat.DenseCopyOf(a)
+	for i := range m.RawMatrix().Rows {
+		floats.Div(m.RawRowView(i), b.RawMatrix().Data)
+	}
 
 	return m
 }
@@ -143,6 +146,14 @@ func MaxIndices(a *mat.Dense) (int, int) {
 func Apply(fn func(i, j int, v float64) float64, a mat.Matrix) *mat.Dense {
 	m := new(mat.Dense)
 	m.Apply(fn, a)
+
+	return m
+}
+
+// applies the function fn to the underlying data of a raw matrix
+func ApplyRaw(a *mat.Dense, fn func([]float64)) *mat.Dense {
+	m := mat.DenseCopyOf(a)
+	fn(m.RawMatrix().Data)
 
 	return m
 }

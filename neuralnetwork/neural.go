@@ -21,7 +21,10 @@ type NeuralNetwork interface {
 }
 
 type NeuralModel interface {
-	Fit(xTrain *mat.Dense, yTrain *mat.Dense, verbose bool) []float64
+	// performs model training using the xTrain and yTrain matrices.
+	// both matrices have shape (nFeatures, nSamples), where each row
+	// corresponds to a feature and each column corresponds to a training sample.
+	Fit(xTrain *mat.Dense, yTrain *mat.Dense, options ...func(*fitConfig)) []float64
 	Predict(x *mat.Dense) *mat.Dense
 	Evaluate(x *mat.Dense, y *mat.Dense) float64
 	Save(path string)
@@ -58,20 +61,25 @@ type neuralModel struct {
 	BatchSize        int
 }
 
+type fitConfig struct {
+	Verbose     bool
+	LogInterval int
+}
+
 func NewNeuralNetwork(config NeuralConfig) NeuralNetwork {
 	// choice of activation function
-	activationFunction := activationSettings[config.Activation]
+	activation := activationSettings[config.Activation]
 
 	// choice of output layer activation function and loss function
 	lossFunction := modeSettings[config.Mode].lossFunction
 	outputActivationFunction := modeSettings[config.Mode].outputActivation
 
 	// initializing the model parameters
-	parameters := initializeParameters(config.NNStructure)
+	parameters := initializeParameters(config.NNStructure, activation)
 
 	return &neuralNetwork{
 		NNStructure:      config.NNStructure,
-		Activation:       activationFunction,
+		Activation:       activation,
 		Mode:             config.Mode,
 		OutputActivation: outputActivationFunction,
 		LossFunction:     lossFunction,
@@ -91,6 +99,7 @@ func (nn *neuralNetwork) NewTrainer(config TrainerConfig, options ...func(*neura
 		Optimizer:     optimizer,
 		LearningRate:  config.LearningRate,
 		Epochs:        config.Epochs,
+		BatchSize:     32,
 	}
 
 	// apply additional options
@@ -108,13 +117,12 @@ func (nm *neuralModel) ForwardPropagation(x *mat.Dense) (*mat.Dense, map[string]
 	A := make(map[string]*mat.Dense) // activation function
 	A[strconv.Itoa(0)] = x
 
-	applyActivationFunction := func(_, _ int, v float64) float64 { return nm.Activation.Function(v) }
 	for l := 0; l < L-1; l++ {
 		W := nm.Parameters["W"+strconv.Itoa(l+1)] // weights W
 		b := nm.Parameters["b"+strconv.Itoa(l+1)] // biases b
 
 		Z[strconv.Itoa(l+1)] = ngo.AddMatrixVector(ngo.MatMul(W, A[strconv.Itoa(l)]), b) // compute the linear operation
-		A[strconv.Itoa(l+1)] = ngo.Apply(applyActivationFunction, Z[strconv.Itoa(l+1)])  // compute the non linear operation
+		A[strconv.Itoa(l+1)] = nm.Activation.Function(Z[strconv.Itoa(l+1)])              // compute the non linear operation
 	}
 	// for output layer
 	Z[strconv.Itoa(L)] = ngo.AddMatrixVector(ngo.MatMul(nm.Parameters["W"+strconv.Itoa(L)],
@@ -142,10 +150,9 @@ func (nm *neuralModel) BackwardPropagation(Z, A map[string]*mat.Dense, y *mat.De
 		ngo.Scale(nm.L2Regularization/float64(m), nm.Parameters["W"+strconv.Itoa(L)]))
 	db[strconv.Itoa(L)] = ngo.Sum(dZ[strconv.Itoa(L)], ngo.OverColumns)
 
-	applyActivationFunctionDerivative := func(_, _ int, v float64) float64 { return nm.Activation.Derivative(v) }
 	for l := L - 1; l > 0; l-- {
 		dA[strconv.Itoa(l)] = ngo.MatMul(nm.Parameters["W"+strconv.Itoa(l+1)].T(), dZ[strconv.Itoa(l+1)])
-		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], ngo.Apply(applyActivationFunctionDerivative, Z[strconv.Itoa(l)]))
+		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], nm.Activation.Derivative(Z[strconv.Itoa(l)]))
 		dW[strconv.Itoa(l)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(l)], A[strconv.Itoa(l-1)].T()),
 			ngo.Scale(nm.L2Regularization/float64(m), nm.Parameters["W"+strconv.Itoa(l)]))
 		db[strconv.Itoa(l)] = ngo.Sum(dZ[strconv.Itoa(l)], ngo.OverColumns)
@@ -154,26 +161,33 @@ func (nm *neuralModel) BackwardPropagation(Z, A map[string]*mat.Dense, y *mat.De
 	return dW, db
 }
 
-// performs model training with the xTrain and yTrain matrices,
-// which is represented as an rows X cols matrix a where each
-// row is a variable and each column is an observation.
-// matrix shape (nFeatures, nSamples)
-func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, verbose bool) []float64 {
+// performs model training using the xTrain and yTrain matrices.
+// both matrices have shape (nFeatures, nSamples), where each row
+// corresponds to a feature and each column corresponds to a training sample.
+func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig)) []float64 {
 	nSamples := xTrain.RawMatrix().Cols
-	if nm.BatchSize == 0 {
-		nm.BatchSize = nSamples
+
+	// default values
+	config := fitConfig{
+		Verbose:     true,
+		LogInterval: 1,
+	}
+
+	// apply additional options
+	for _, opt := range options {
+		opt(&config)
 	}
 
 	// keep track of the loss
 	losses := []float64{}
 
 	// loop
-	start := time.Now()
 	iterPerEpoch := int(math.Ceil(float64(nSamples) / float64(nm.BatchSize)))
 	for i := 1; i <= nm.Epochs; i++ {
+		start := time.Now()
 		lossBatches := []float64{}
 
-		bar := progressBar(iterPerEpoch, fmt.Sprintf("epoch %5d/%d: ", i, nm.Epochs))
+		bar := progressBar(iterPerEpoch, fmt.Sprintf("epoch %5d/%d: ", i, nm.Epochs), config.Verbose)
 		for startIdx := 0; startIdx < nSamples; startIdx += nm.BatchSize {
 			bar.Add(1)
 			endIdx := startIdx + nm.BatchSize
@@ -201,12 +215,12 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, verbose bool) []float64 {
 
 		// print the loss every x iterations
 		meanLoss := stat.Mean(lossBatches, nil)
-		if verbose && i%(nm.Epochs/10) == 0 || verbose && i == 1 {
+		if config.Verbose && (i%config.LogInterval == 0 || i == 1 || i == nm.Epochs) {
 			if nm.Mode == ModeRegression {
-				fmt.Printf(" | t: %7.2fs | loss: %.6e \n", time.Since(start).Seconds(), meanLoss)
+				fmt.Printf(" | t: %7.2fms | loss: %.6e \n", float64(time.Since(start))/float64(time.Millisecond), meanLoss)
 			} else {
-				fmt.Printf(" | t: %7.2fs | loss: %.6e | acc: %.4f \n",
-					time.Since(start).Seconds(), meanLoss, nm.Evaluate(xTrain, yTrain))
+				fmt.Printf(" | t: %7.2fms | loss: %.6e | acc: %.4f \n",
+					float64(time.Since(start))/float64(time.Millisecond), meanLoss, nm.Evaluate(xTrain, yTrain))
 			}
 		}
 		losses = append(losses, meanLoss)
@@ -279,12 +293,25 @@ func (nm *neuralModel) Summary() {
 }
 
 // initializing the model parameters
-func initializeParameters(nnStructure []int) map[string]*mat.Dense {
+func initializeParameters(nnStructure []int, activation activation) map[string]*mat.Dense {
 	parameters := make(map[string]*mat.Dense) // map containing the parameters
 	L := len(nnStructure) - 1                 // number of layers
 
 	for l := 0; l < L; l++ {
-		scalar := math.Sqrt((6.0 / float64(nnStructure[l]+nnStructure[l+1])))
+		fanIn := nnStructure[l]
+		fanOut := nnStructure[l+1]
+
+		scalar := 1.0
+		if l == L-1 {
+			scalar = math.Sqrt(2.0 / float64(fanIn+fanOut)) // Xavier (Glorot)
+		} else {
+			switch activation.Name {
+			case ReLUActivation, EluActivation:
+				scalar = math.Sqrt(2.0 / float64(fanIn)) // He (Kaiming)
+			default: // tanh, sigmoid, softmax, linear...
+				scalar = math.Sqrt(2.0 / float64(fanIn+fanOut)) // Xavier (Glorot)
+			}
+		}
 
 		parameters["W"+strconv.Itoa(l+1)] = ngo.Scale(scalar, ngo.Randn(nnStructure[l+1], nnStructure[l]))
 		parameters["b"+strconv.Itoa(l+1)] = mat.NewDense(nnStructure[l+1], 1, nil)
@@ -294,13 +321,14 @@ func initializeParameters(nnStructure []int) map[string]*mat.Dense {
 }
 
 // progress bar
-func progressBar(iter int, description string) *progressbar.ProgressBar {
+func progressBar(iter int, description string, verbose bool) *progressbar.ProgressBar {
 	return progressbar.NewOptions(iter,
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionSetWidth(20),
 		progressbar.OptionShowCount(),
 		progressbar.OptionShowElapsedTimeOnFinish(),
 		progressbar.OptionSetDescription(description),
+		progressbar.OptionSetVisibility(verbose),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "[green]━[reset]",
 			SaucerPadding: " ",
@@ -317,5 +345,19 @@ func WithBatchSize(batchSize int) func(*neuralModel) {
 func WithL2Regularization(lambd float64) func(*neuralModel) {
 	return func(nm *neuralModel) {
 		nm.L2Regularization = lambd
+	}
+}
+
+func WithVerbose(verbose bool) func(*fitConfig) {
+	return func(c *fitConfig) {
+		c.Verbose = verbose
+	}
+}
+
+func WithLogInterval(interval int) func(*fitConfig) {
+	return func(c *fitConfig) {
+		if interval > 0 {
+			c.LogInterval = interval
+		}
 	}
 }

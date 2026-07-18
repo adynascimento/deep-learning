@@ -3,12 +3,23 @@ package main
 import (
 	"fmt"
 
+	/*
+		#cgo CFLAGS: -g -O2
+		#cgo LDFLAGS: -framework Accelerate
+	*/
+	"C"
+
+	"gonum.org/v1/gonum/blas/blas64"
+	"gonum.org/v1/netlib/blas/netlib"
+
 	"github.com/adynascimento/deep-learning/cnn"
 	"github.com/adynascimento/deep-learning/ngo"
 	"gonum.org/v1/gonum/mat"
 )
 
 func main() {
+	blas64.Use(netlib.Implementation{})
+
 	// training data
 	x := LoadDataFromFile("../../dataset/mnist/train_x_shuffled.csv")
 	v := LoadDataFromFile("../../dataset/mnist/test_x.csv")
@@ -49,7 +60,7 @@ func main() {
 		cnn.WithBatchSize(32),
 		cnn.WithL2Regularization(1.40e-06))
 	model.Summary()
-	model.Fit(xTrain, yTrain, true)
+	model.Fit(xTrain, yTrain)
 
 	// accuracy of the model making predictions
 	fmt.Printf("accuracy of training data: %.4f \n", model.Evaluate(xTrain, yTrain))

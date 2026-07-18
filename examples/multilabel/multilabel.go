@@ -38,7 +38,7 @@ func main() {
 		Epochs:       500},                  // number of iterations
 		network.WithBatchSize(32),
 		network.WithL2Regularization(1.0e-06))
-	model.Fit(xTrain, yTrain, true)
+	model.Fit(xTrain, yTrain)
 
 	// saves neural network model to file
 	model.Save("networkmodel.json")
