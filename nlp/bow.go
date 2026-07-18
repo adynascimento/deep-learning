@@ -2,10 +2,13 @@ package nlp
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 
 	"gonum.org/v1/gonum/mat"
 )
+
+var wordRegex = regexp.MustCompile(`\b\p{L}{2,}\b`)
 
 type CountVectorizer interface {
 	Fit(train ...string)
@@ -37,26 +40,41 @@ func NewCountVectorizer(numWords int, stopWords ...string) CountVectorizer {
 
 // processes the supplied training data to populate wordIndex map
 func (v *countVectorizer) Fit(texts ...string) {
-	index := 0
 	if len(v.wordIndex) != 0 {
 		v.wordIndex = make(map[string]int)
 	}
 
+	// count term frequencies
+	freq := make(map[string]int)
 	for _, text := range texts {
 		words := v.Tokenize(text)
 		for _, word := range words {
-			if _, ok := v.wordIndex[word]; !ok {
-				v.wordIndex[word] = index
-				index++
-				if index >= v.numWords {
-					break
-				}
-			}
+			freq[word]++
 		}
+	}
 
-		if index >= v.numWords {
-			break
+	// convert map to slice
+	type termFreq struct {
+		term string
+		freq int
+	}
+	terms := make([]termFreq, 0, len(freq))
+	for term, f := range freq {
+		terms = append(terms, termFreq{term, f})
+	}
+
+	// sort by frequency (descending)
+	sort.Slice(terms, func(i, j int) bool {
+		if terms[i].freq == terms[j].freq {
+			return terms[i].term < terms[j].term
 		}
+		return terms[i].freq > terms[j].freq
+	})
+
+	// keep only numWords
+	n := min(v.numWords, len(terms))
+	for i := 0; i < n; i++ {
+		v.wordIndex[terms[i].term] = i
 	}
 }
 
@@ -87,7 +105,7 @@ func (v *countVectorizer) Tokenize(text string) []string {
 	c := strings.ToLower(text)
 
 	// match whole words, removing any punctuation/whitespace
-	words := regexp.MustCompile(`\b\p{L}{2,}\b`).FindAllString(c, -1)
+	words := wordRegex.FindAllString(c, -1)
 
 	// filter out stop words
 	if v.stopWords != nil {
