@@ -57,6 +57,7 @@ type neuralModel struct {
 	Optimizer        optimizer
 	LearningRate     float64
 	L2Regularization float64
+	Dropout          float64
 	Epochs           int
 	BatchSize        int
 }
@@ -111,10 +112,11 @@ func (nn *neuralNetwork) NewTrainer(config TrainerConfig, options ...func(*neura
 }
 
 // forward propagation step
-func (nm *neuralModel) ForwardPropagation(x *mat.Dense) (*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense) {
+func (nm *neuralModel) ForwardPropagation(x *mat.Dense, training bool) (*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense, map[string][]bool) {
 	L := len(nm.Parameters) / 2      // number of layers
 	Z := make(map[string]*mat.Dense) // linear function
 	A := make(map[string]*mat.Dense) // activation function
+	D := make(map[string][]bool)     // dropout masks (training only)
 	A[strconv.Itoa(0)] = x
 
 	for l := 0; l < L-1; l++ {
@@ -123,6 +125,12 @@ func (nm *neuralModel) ForwardPropagation(x *mat.Dense) (*mat.Dense, map[string]
 
 		Z[strconv.Itoa(l+1)] = ngo.AddMatrixVector(ngo.MatMul(W, A[strconv.Itoa(l)]), b) // compute the linear operation
 		A[strconv.Itoa(l+1)] = nm.Activation.Function(Z[strconv.Itoa(l+1)])              // compute the non linear operation
+
+		// apply dropout
+		if training && nm.Dropout > 0 {
+			D[strconv.Itoa(l+1)] = DropoutMask(A[strconv.Itoa(l+1)], nm.Dropout)
+			ApplyDropoutMask(A[strconv.Itoa(l+1)], D[strconv.Itoa(l+1)], nm.Dropout)
+		}
 	}
 	// for output layer
 	Z[strconv.Itoa(L)] = ngo.AddMatrixVector(ngo.MatMul(nm.Parameters["W"+strconv.Itoa(L)],
@@ -132,11 +140,11 @@ func (nm *neuralModel) ForwardPropagation(x *mat.Dense) (*mat.Dense, map[string]
 	// prediction
 	yHat := A[strconv.Itoa(L)]
 
-	return yHat, Z, A
+	return yHat, Z, A, D
 }
 
 // backward propagation step
-func (nm *neuralModel) BackwardPropagation(Z, A map[string]*mat.Dense, y *mat.Dense) (map[string]*mat.Dense, map[string]*mat.Dense) {
+func (nm *neuralModel) BackwardPropagation(Z, A map[string]*mat.Dense, D map[string][]bool, y *mat.Dense) (map[string]*mat.Dense, map[string]*mat.Dense) {
 	m := y.RawMatrix().Cols     // number of training examples
 	L := len(nm.Parameters) / 2 // number of layers
 
@@ -152,6 +160,12 @@ func (nm *neuralModel) BackwardPropagation(Z, A map[string]*mat.Dense, y *mat.De
 
 	for l := L - 1; l > 0; l-- {
 		dA[strconv.Itoa(l)] = ngo.MatMul(nm.Parameters["W"+strconv.Itoa(l+1)].T(), dZ[strconv.Itoa(l+1)])
+
+		// apply dropout
+		if nm.Dropout > 0 {
+			ApplyDropoutMask(dA[strconv.Itoa(l)], D[strconv.Itoa(l)], nm.Dropout)
+		}
+
 		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], nm.Activation.Derivative(Z[strconv.Itoa(l)]))
 		dW[strconv.Itoa(l)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(l)], A[strconv.Itoa(l-1)].T()),
 			ngo.Scale(nm.L2Regularization/float64(m), nm.Parameters["W"+strconv.Itoa(l)]))
@@ -199,14 +213,14 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig
 			yBatch := yTrain.Slice(0, yTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)
 
 			// forward propagation
-			yHat, Z, A := nm.ForwardPropagation(xBatch)
+			yHat, Z, A, D := nm.ForwardPropagation(xBatch, true)
 
 			// loss function
 			loss := nm.LossFunction(yHat, yBatch, nm.Parameters, nm.L2Regularization)
 			lossBatches = append(lossBatches, loss)
 
 			// backward propagation
-			dW, db := nm.BackwardPropagation(Z, A, yBatch)
+			dW, db := nm.BackwardPropagation(Z, A, D, yBatch)
 
 			// update parameters (optimization algorithm)
 			nm.Parameters = nm.Optimizer.Function(&nm.Optimizer, nm.Parameters, dW, db,
@@ -231,7 +245,7 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig
 
 // predictions with forward propagation
 func (nm *neuralModel) Predict(x *mat.Dense) *mat.Dense {
-	predictions, _, _ := nm.ForwardPropagation(x)
+	predictions, _, _, _ := nm.ForwardPropagation(x, false)
 	return predictions
 }
 
@@ -345,6 +359,12 @@ func WithBatchSize(batchSize int) func(*neuralModel) {
 func WithL2Regularization(lambd float64) func(*neuralModel) {
 	return func(nm *neuralModel) {
 		nm.L2Regularization = lambd
+	}
+}
+
+func WithDropout(dropout float64) func(*neuralModel) {
+	return func(nm *neuralModel) {
+		nm.Dropout = dropout
 	}
 }
 

@@ -71,6 +71,7 @@ type cnnModel struct {
 	Optimizer        optimizerType
 	LearningRate     float64
 	L2Regularization float64
+	Dropout          float64
 	Epochs           int
 	BatchSize        int
 }
@@ -462,6 +463,12 @@ func WithBatchSize(batchSize int) func(*cnnModel) {
 func WithL2Regularization(lambd float64) func(*cnnModel) {
 	return func(nm *cnnModel) {
 		nm.L2Regularization = lambd
+	}
+}
+
+func WithDropout(dropout float64) func(*cnnModel) {
+	return func(nm *cnnModel) {
+		nm.Dropout = dropout
 	}
 }
 

@@ -35,9 +35,10 @@ func main() {
 	model := neural.NewTrainer(network.TrainerConfig{
 		Optimizer:    network.AdamOptimizer, // optimizer
 		LearningRate: 1e-03,                 // learning rate
-		Epochs:       500},                  // number of iterations
+		Epochs:       50},                   // number of iterations
 		network.WithBatchSize(32),
-		network.WithL2Regularization(1.0e-06))
+		network.WithL2Regularization(1.0e-06),
+		network.WithDropout(0.4))
 	model.Fit(xTrain, yTrain)
 
 	// saves neural network model to file
