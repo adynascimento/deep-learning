@@ -83,11 +83,11 @@ func (dl *denseLayer) BackwardPropagation(Z, A map[string]*mat.Dense, y *mat.Den
 		db[strconv.Itoa(l)] = ngo.Sum(dZ[strconv.Itoa(l)], ngo.OverColumns)
 	}
 
+	dA[strconv.Itoa(0)] = ngo.MatMul(dl.Parameters["W"+strconv.Itoa(1)].T(), dZ[strconv.Itoa(1)])
+
 	// update parameters (optimization algorithm)
 	dl.Parameters = dl.Optimizer.Function(&dl.Optimizer, dl.Parameters, dW, db, learningRate, dl.Iter)
 	dl.Iter++
-
-	dA[strconv.Itoa(0)] = ngo.MatMul(dl.Parameters["W"+strconv.Itoa(1)].T(), dZ[strconv.Itoa(1)])
 
 	return dA[strconv.Itoa(0)]
 }
