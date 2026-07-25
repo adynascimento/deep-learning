@@ -7,14 +7,16 @@ import (
 	*/
 	"C"
 
+	"fmt"
+
 	"gonum.org/v1/gonum/blas/blas64"
 	"gonum.org/v1/netlib/blas/netlib"
 
-	"github.com/adynascimento/deep-learning/neuralnetwork"
+	"github.com/adynascimento/deep-learning/mlp"
 	"github.com/adynascimento/deep-learning/ngo"
+	"github.com/adynascimento/deep-learning/nncore"
 	"gonum.org/v1/gonum/mat"
 )
-import "fmt"
 
 func init() {
 	// force the Gonum ecosystem to use the optimized C engine
@@ -42,15 +44,15 @@ func main() {
 	outputDim := yTrain.RawMatrix().Rows
 
 	// neural network model
-	neural := neuralnetwork.NewNeuralNetwork(neuralnetwork.NeuralConfig{
+	neural := mlp.NewNeuralNetwork(mlp.NeuralConfig{
 		NNStructure: []int{inputDim, 128, 64, 32, 16, outputDim},
-		Activation:  neuralnetwork.ReLUActivation,
-		Mode:        neuralnetwork.ModeRegression,
+		Activation:  nncore.ReLUActivation,
+		Mode:        nncore.ModeRegression,
 	})
 
 	// optimizer to train the model
-	model := neural.NewTrainer(neuralnetwork.TrainerConfig{
-		Optimizer:    neuralnetwork.AdamOptimizer,
+	model := neural.NewTrainer(mlp.TrainerConfig{
+		Optimizer:    nncore.AdamOptimizer,
 		LearningRate: 0.001,
 		Epochs:       100})
 	model.Summary()

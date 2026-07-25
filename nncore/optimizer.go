@@ -1,4 +1,4 @@
-package cnn
+package nncore
 
 import (
 	"math"
@@ -8,38 +8,47 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
-var denseOptimizerSettings = map[optimizerType]denseOptimizer{
+var OptimizerSettings = map[OptimizerType]Optimizer{
 	GradientDescentOptimizer: {
 		Name:     GradientDescentOptimizer,
-		Function: denseGradientDescentOptimizer,
+		Function: GradientDescentOptimizerFunc,
 	},
 	AdamOptimizer: {
 		Name:     AdamOptimizer,
-		Function: denseAdamOptimizer,
+		Function: AdamOptimizerFunc,
 	},
 }
 
-type optimizerType string
-type denseOptimizerFunction func(*denseOptimizer, map[string]*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense, float64, float64) map[string]*mat.Dense
+type OptimizerType string
+type OptimizerFunction func(*Optimizer, map[string]*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense, float64, float64) map[string]*mat.Dense
 
 const (
-	AdamOptimizer            optimizerType = "adam"
-	GradientDescentOptimizer optimizerType = "gradientdescent"
+	AdamOptimizer            OptimizerType = "adam"
+	GradientDescentOptimizer OptimizerType = "gradientdescent"
 )
 
-type denseOptimizer struct {
-	Name     optimizerType
-	Function denseOptimizerFunction
-	Adam     denseAdamParameters
+type Optimizer struct {
+	Name     OptimizerType
+	Function OptimizerFunction
+	Adam     AdamParameters
 }
 
-type denseAdamParameters struct {
+type AdamParameters struct {
 	v map[string]*mat.Dense
 	s map[string]*mat.Dense
 }
 
+func NewOptimizer(optType OptimizerType, parameters map[string]*mat.Dense) Optimizer {
+	optimizer := OptimizerSettings[optType]
+	if optType == AdamOptimizer {
+		optimizer.Adam = InitializeAdam(parameters)
+	}
+
+	return optimizer
+}
+
 // update the parameters (gradient descent)
-func denseGradientDescentOptimizer(opt *denseOptimizer, parameters, dW, db map[string]*mat.Dense, learningRate, t float64) map[string]*mat.Dense {
+func GradientDescentOptimizerFunc(opt *Optimizer, parameters, dW, db map[string]*mat.Dense, learningRate, t float64) map[string]*mat.Dense {
 	L := len(parameters) / 2 // number of layers
 
 	for l := 0; l < L; l++ {
@@ -51,7 +60,7 @@ func denseGradientDescentOptimizer(opt *denseOptimizer, parameters, dW, db map[s
 }
 
 // update the parameters (adam optimizer)
-func denseAdamOptimizer(opt *denseOptimizer, parameters, dW, db map[string]*mat.Dense, learningRate, t float64) map[string]*mat.Dense {
+func AdamOptimizerFunc(opt *Optimizer, parameters, dW, db map[string]*mat.Dense, learningRate, t float64) map[string]*mat.Dense {
 	// default parameters
 	beta1 := 0.9
 	beta2 := 0.999
@@ -91,7 +100,7 @@ func denseAdamOptimizer(opt *denseOptimizer, parameters, dW, db map[string]*mat.
 }
 
 // initializing the adam model parameters
-func denseInitializeAdam(parameters map[string]*mat.Dense) denseAdamParameters {
+func InitializeAdam(parameters map[string]*mat.Dense) AdamParameters {
 	L := len(parameters) / 2         // number of layers
 	v := make(map[string]*mat.Dense) // map containing the parameters
 	s := make(map[string]*mat.Dense) // map containing the parameters
@@ -106,7 +115,7 @@ func denseInitializeAdam(parameters map[string]*mat.Dense) denseAdamParameters {
 		s["db"+strconv.Itoa(l+1)] = mat.NewDense(nb, mb, nil)
 	}
 
-	return denseAdamParameters{
+	return AdamParameters{
 		v: v,
 		s: s,
 	}

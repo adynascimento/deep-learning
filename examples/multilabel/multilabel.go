@@ -3,9 +3,10 @@ package main
 import (
 	"fmt"
 
-	network "github.com/adynascimento/deep-learning/neuralnetwork"
+	"github.com/adynascimento/deep-learning/mlp"
 	"github.com/adynascimento/deep-learning/ngo"
 	"github.com/adynascimento/deep-learning/nlp"
+	"github.com/adynascimento/deep-learning/nncore"
 )
 
 func main() {
@@ -25,20 +26,20 @@ func main() {
 	outputDim := yTrain.RawMatrix().Rows
 
 	// neural network model
-	neural := network.NewNeuralNetwork(network.NeuralConfig{
+	neural := mlp.NewNeuralNetwork(mlp.NeuralConfig{
 		NNStructure: []int{inputDim, 20, 20, outputDim}, // neural network structure
-		Activation:  network.TanhActivation,             // activation function
-		Mode:        network.ModeMultiLabel,             // mode determines output layer activation and loss function
+		Activation:  nncore.TanhActivation,              // activation function
+		Mode:        nncore.ModeMultiLabel,              // mode determines output layer activation and loss function
 	})
 
 	// optimizer to train the model
-	model := neural.NewTrainer(network.TrainerConfig{
-		Optimizer:    network.AdamOptimizer, // optimizer
-		LearningRate: 1e-03,                 // learning rate
-		Epochs:       50},                   // number of iterations
-		network.WithBatchSize(32),
-		network.WithL2Regularization(1.0e-06),
-		network.WithDropout(0.4))
+	model := neural.NewTrainer(mlp.TrainerConfig{
+		Optimizer:    nncore.AdamOptimizer, // optimizer
+		LearningRate: 1e-03,                // learning rate
+		Epochs:       50},                  // number of iterations
+		mlp.WithBatchSize(32),
+		mlp.WithL2Regularization(1.0e-06),
+		mlp.WithDropout(0.4))
 	model.Fit(xTrain, yTrain)
 
 	// saves neural network model to file

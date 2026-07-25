@@ -4,16 +4,17 @@ import (
 	"math"
 
 	"github.com/adynascimento/deep-learning/ngo"
+	"github.com/adynascimento/deep-learning/nncore"
 	"gonum.org/v1/gonum/mat"
 )
 
-var convOptimizerSettings = map[optimizerType]convOptimizer{
-	GradientDescentOptimizer: {
-		Name:     GradientDescentOptimizer,
+var convOptimizerSettings = map[nncore.OptimizerType]convOptimizer{
+	nncore.GradientDescentOptimizer: {
+		Name:     nncore.GradientDescentOptimizer,
 		Function: convGradientDescentOptimizer,
 	},
-	AdamOptimizer: {
-		Name:     AdamOptimizer,
+	nncore.AdamOptimizer: {
+		Name:     nncore.AdamOptimizer,
 		Function: convAdamOptimizer,
 	},
 }
@@ -21,7 +22,7 @@ var convOptimizerSettings = map[optimizerType]convOptimizer{
 type convOptimizerFunction func(*convOptimizer, parameters, [][]*mat.Dense, *mat.Dense, float64, float64) parameters
 
 type convOptimizer struct {
-	Name     optimizerType
+	Name     nncore.OptimizerType
 	Function convOptimizerFunction
 	Adam     convAdamParameters
 }

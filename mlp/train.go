@@ -1,4 +1,4 @@
-package neuralnetwork
+package mlp
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/adynascimento/deep-learning/ngo"
+	"github.com/adynascimento/deep-learning/nncore"
 	"github.com/olekukonko/tablewriter"
 	"github.com/schollz/progressbar/v3"
 
@@ -15,101 +16,6 @@ import (
 	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/gonum/stat"
 )
-
-type NeuralNetwork interface {
-	NewTrainer(config TrainerConfig, options ...func(*neuralModel)) NeuralModel
-}
-
-type NeuralModel interface {
-	// performs model training using the xTrain and yTrain matrices.
-	// both matrices have shape (nFeatures, nSamples), where each row
-	// corresponds to a feature and each column corresponds to a training sample.
-	Fit(xTrain *mat.Dense, yTrain *mat.Dense, options ...func(*fitConfig)) []float64
-	Predict(x *mat.Dense) *mat.Dense
-	Evaluate(x *mat.Dense, y *mat.Dense) float64
-	Save(path string)
-	Summary()
-}
-
-type NeuralConfig struct {
-	NNStructure []int
-	Activation  activationType
-	Mode        modeType
-}
-
-type TrainerConfig struct {
-	Optimizer    optimizerType
-	LearningRate float64
-	Epochs       int
-}
-
-type neuralNetwork struct {
-	NNStructure      []int
-	Activation       activation
-	Mode             modeType
-	OutputActivation outputActivation
-	LossFunction     lossFunction
-	Parameters       map[string]*mat.Dense
-}
-
-type neuralModel struct {
-	*neuralNetwork
-	Optimizer        optimizer
-	LearningRate     float64
-	L2Regularization float64
-	Dropout          float64
-	Epochs           int
-	BatchSize        int
-}
-
-type fitConfig struct {
-	Verbose     bool
-	LogInterval int
-}
-
-func NewNeuralNetwork(config NeuralConfig) NeuralNetwork {
-	// choice of activation function
-	activation := activationSettings[config.Activation]
-
-	// choice of output layer activation function and loss function
-	lossFunction := modeSettings[config.Mode].lossFunction
-	outputActivationFunction := modeSettings[config.Mode].outputActivation
-
-	// initializing the model parameters
-	parameters := initializeParameters(config.NNStructure, activation)
-
-	return &neuralNetwork{
-		NNStructure:      config.NNStructure,
-		Activation:       activation,
-		Mode:             config.Mode,
-		OutputActivation: outputActivationFunction,
-		LossFunction:     lossFunction,
-		Parameters:       parameters,
-	}
-}
-
-func (nn *neuralNetwork) NewTrainer(config TrainerConfig, options ...func(*neuralModel)) NeuralModel {
-	// choice of optimization algorithm
-	optimizer := optimizerSettings[config.Optimizer]
-	if config.Optimizer == AdamOptimizer {
-		optimizer.Adam = initializeAdam(nn.Parameters)
-	}
-
-	model := neuralModel{
-		neuralNetwork: nn,
-		Optimizer:     optimizer,
-		LearningRate:  config.LearningRate,
-		Epochs:        config.Epochs,
-		BatchSize:     32,
-	}
-
-	// apply additional options
-	for _, option := range options {
-		option(&model)
-	}
-
-	return &model
-}
 
 // forward propagation step
 func (nm *neuralModel) ForwardPropagation(x *mat.Dense, training bool) (*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense, map[string][]bool) {
@@ -128,8 +34,8 @@ func (nm *neuralModel) ForwardPropagation(x *mat.Dense, training bool) (*mat.Den
 
 		// apply dropout
 		if training && nm.Dropout > 0 {
-			D[strconv.Itoa(l+1)] = DropoutMask(A[strconv.Itoa(l+1)], nm.Dropout)
-			ApplyDropoutMask(A[strconv.Itoa(l+1)], D[strconv.Itoa(l+1)], nm.Dropout)
+			D[strconv.Itoa(l+1)] = nncore.DropoutMask(A[strconv.Itoa(l+1)], nm.Dropout)
+			nncore.ApplyDropoutMask(A[strconv.Itoa(l+1)], D[strconv.Itoa(l+1)], nm.Dropout)
 		}
 	}
 	// for output layer
@@ -163,7 +69,7 @@ func (nm *neuralModel) BackwardPropagation(Z, A map[string]*mat.Dense, D map[str
 
 		// apply dropout
 		if nm.Dropout > 0 {
-			ApplyDropoutMask(dA[strconv.Itoa(l)], D[strconv.Itoa(l)], nm.Dropout)
+			nncore.ApplyDropoutMask(dA[strconv.Itoa(l)], D[strconv.Itoa(l)], nm.Dropout)
 		}
 
 		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], nm.Activation.Derivative(Z[strconv.Itoa(l)]))
@@ -230,7 +136,7 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig
 		// print the loss every x iterations
 		meanLoss := stat.Mean(lossBatches, nil)
 		if config.Verbose && (i%config.LogInterval == 0 || i == 1 || i == nm.Epochs) {
-			if nm.Mode == ModeRegression {
+			if nm.Mode == nncore.ModeRegression {
 				fmt.Printf(" | t: %7.2fms | loss: %.6e \n", float64(time.Since(start))/float64(time.Millisecond), meanLoss)
 			} else {
 				fmt.Printf(" | t: %7.2fms | loss: %.6e | acc: %.4f \n",
@@ -255,11 +161,11 @@ func (nm *neuralModel) Evaluate(x, y *mat.Dense) float64 {
 
 	metric := 0.0
 	switch nm.Mode {
-	case ModeRegression:
+	case nncore.ModeRegression:
 		// mean squared error
 		metric = mat.Sum(ngo.Square(ngo.Sub(y, yPred))) / float64(y.RawMatrix().Cols)
 
-	case ModeMultiClass:
+	case nncore.ModeMultiClass:
 		// accuracy
 		for j := 0; j < y.RawMatrix().Cols; j++ {
 			trueClass := floats.MaxIdx(mat.Col(nil, j, y))
@@ -270,7 +176,7 @@ func (nm *neuralModel) Evaluate(x, y *mat.Dense) float64 {
 		}
 		metric = (metric / float64(y.RawMatrix().Cols))
 
-	case ModeMultiLabel:
+	case nncore.ModeMultiLabel:
 		// hamming accuracy
 		for j := 0; j < y.RawMatrix().Cols; j++ {
 			correctLabels := 0.0
@@ -306,34 +212,6 @@ func (nm *neuralModel) Summary() {
 	table.Render()
 }
 
-// initializing the model parameters
-func initializeParameters(nnStructure []int, activation activation) map[string]*mat.Dense {
-	parameters := make(map[string]*mat.Dense) // map containing the parameters
-	L := len(nnStructure) - 1                 // number of layers
-
-	for l := 0; l < L; l++ {
-		fanIn := nnStructure[l]
-		fanOut := nnStructure[l+1]
-
-		scalar := 1.0
-		if l == L-1 {
-			scalar = math.Sqrt(2.0 / float64(fanIn+fanOut)) // Xavier (Glorot)
-		} else {
-			switch activation.Name {
-			case ReLUActivation, EluActivation:
-				scalar = math.Sqrt(2.0 / float64(fanIn)) // He (Kaiming)
-			default: // tanh, sigmoid, softmax, linear...
-				scalar = math.Sqrt(2.0 / float64(fanIn+fanOut)) // Xavier (Glorot)
-			}
-		}
-
-		parameters["W"+strconv.Itoa(l+1)] = ngo.Scale(scalar, ngo.Randn(nnStructure[l+1], nnStructure[l]))
-		parameters["b"+strconv.Itoa(l+1)] = mat.NewDense(nnStructure[l+1], 1, nil)
-	}
-
-	return parameters
-}
-
 // progress bar
 func progressBar(iter int, description string, verbose bool) *progressbar.ProgressBar {
 	return progressbar.NewOptions(iter,
@@ -348,36 +226,4 @@ func progressBar(iter int, description string, verbose bool) *progressbar.Progre
 			SaucerPadding: " ",
 		}),
 	)
-}
-
-func WithBatchSize(batchSize int) func(*neuralModel) {
-	return func(nm *neuralModel) {
-		nm.BatchSize = batchSize
-	}
-}
-
-func WithL2Regularization(lambd float64) func(*neuralModel) {
-	return func(nm *neuralModel) {
-		nm.L2Regularization = lambd
-	}
-}
-
-func WithDropout(dropout float64) func(*neuralModel) {
-	return func(nm *neuralModel) {
-		nm.Dropout = dropout
-	}
-}
-
-func WithVerbose(verbose bool) func(*fitConfig) {
-	return func(c *fitConfig) {
-		c.Verbose = verbose
-	}
-}
-
-func WithLogInterval(interval int) func(*fitConfig) {
-	return func(c *fitConfig) {
-		if interval > 0 {
-			c.LogInterval = interval
-		}
-	}
 }

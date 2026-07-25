@@ -1,4 +1,4 @@
-package neuralnetwork
+package nncore
 
 import (
 	"math/rand/v2"
@@ -17,7 +17,6 @@ func DropoutMask(a *mat.Dense, p float64) []bool {
 
 	return mask
 }
-
 
 // inverted dropout: during training, surviving activations are scaled by 1/(1-p)
 // so that no scaling is required during inference.

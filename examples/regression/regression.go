@@ -3,8 +3,9 @@ package main
 import (
 	"math"
 
-	network "github.com/adynascimento/deep-learning/neuralnetwork"
+	"github.com/adynascimento/deep-learning/mlp"
 	"github.com/adynascimento/deep-learning/ngo"
+	"github.com/adynascimento/deep-learning/nncore"
 
 	"github.com/adynascimento/plot/plotter"
 	"gonum.org/v1/gonum/mat"
@@ -21,18 +22,18 @@ func main() {
 	outputDim := yTrain.RawMatrix().Rows
 
 	// neural network model
-	neural := network.NewNeuralNetwork(network.NeuralConfig{
+	neural := mlp.NewNeuralNetwork(mlp.NeuralConfig{
 		NNStructure: []int{inputDim, 40, 20, 10, outputDim}, // neural network structure
-		Activation:  network.TanhActivation,                 // activation function
-		Mode:        network.ModeRegression,                 // mode determines output layer activation and loss function
+		Activation:  nncore.TanhActivation,                  // activation function
+		Mode:        nncore.ModeRegression,                  // mode determines output layer activation and loss function
 	})
 
 	// optimizer to train the model
-	model := neural.NewTrainer(network.TrainerConfig{
-		Optimizer:    network.AdamOptimizer, // optimizer
-		LearningRate: 0.001,                 // learning rate
-		Epochs:       10000},                // number of iterations
-		network.WithL2Regularization(1.40e-06))
+	model := neural.NewTrainer(mlp.TrainerConfig{
+		Optimizer:    nncore.AdamOptimizer, // optimizer
+		LearningRate: 0.001,                // learning rate
+		Epochs:       10000},               // number of iterations
+		mlp.WithL2Regularization(1.40e-06))
 	model.Fit(xTrain, yTrain)
 
 	// saves neural network model to file

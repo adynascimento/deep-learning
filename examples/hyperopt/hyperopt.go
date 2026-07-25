@@ -5,8 +5,9 @@ import (
 	"strconv"
 
 	"github.com/adynascimento/deep-learning/hyperopt"
-	network "github.com/adynascimento/deep-learning/neuralnetwork"
+	"github.com/adynascimento/deep-learning/mlp"
 	"github.com/adynascimento/deep-learning/ngo"
+	"github.com/adynascimento/deep-learning/nncore"
 )
 
 func main() {
@@ -18,21 +19,21 @@ func main() {
 
 	neuralNetworkModel := func(trialID int, params hyperopt.Params) float64 {
 		// neural network model
-		neural := network.NewNeuralNetwork(network.NeuralConfig{
-			NNStructure: params.NNStructure,     // neural network structure
-			Activation:  network.TanhActivation, // activation function
-			Mode:        network.ModeMultiClass, // mode determines output layer activation and loss function
+		neural := mlp.NewNeuralNetwork(mlp.NeuralConfig{
+			NNStructure: params.NNStructure,    // neural network structure
+			Activation:  nncore.TanhActivation, // activation function
+			Mode:        nncore.ModeMultiClass, // mode determines output layer activation and loss function
 		})
 
 		// optimizer to train the model
-		model := neural.NewTrainer(network.TrainerConfig{
-			Optimizer:    network.AdamOptimizer, // optimizer
-			LearningRate: params.LearningRate,   // learning rate
-			Epochs:       400},                  // number of iterations
-			network.WithBatchSize(32),
-			network.WithL2Regularization(params.L2Regularization),
+		model := neural.NewTrainer(mlp.TrainerConfig{
+			Optimizer:    nncore.AdamOptimizer, // optimizer
+			LearningRate: params.LearningRate,  // learning rate
+			Epochs:       400},                 // number of iterations
+			mlp.WithBatchSize(32),
+			mlp.WithL2Regularization(params.L2Regularization),
 		)
-		model.Fit(xTrain, yTrain, network.WithVerbose(false))
+		model.Fit(xTrain, yTrain, mlp.WithVerbose(false))
 		model.Save("./trials/networkmodel" + strconv.Itoa(trialID) + ".json")
 
 		// make predictions and evaluate model

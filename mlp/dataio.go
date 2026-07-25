@@ -1,4 +1,4 @@
-package neuralnetwork
+package mlp
 
 import (
 	"encoding/json"
@@ -6,18 +6,19 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/adynascimento/deep-learning/nncore"
 	"gonum.org/v1/gonum/mat"
 )
 
 type model struct {
-	NNStructure      []int                `json:"nn_structure"`
-	ActivationName   activationType       `json:"activation"`
-	Mode             modeType             `json:"mode"`
-	OptimizerName    optimizerType        `json:"optimizer"`
-	LearningRate     float64              `json:"learning_rate"`
-	L2Regularization float64              `json:"l2_regularization"`
-	Epochs           int                  `json:"epochs"`
-	Parameters       map[string][]float64 `json:"parameters"`
+	NNStructure      []int                 `json:"nn_structure"`
+	ActivationName   nncore.ActivationType `json:"activation"`
+	Mode             nncore.ModeType       `json:"mode"`
+	OptimizerName    nncore.OptimizerType  `json:"optimizer"`
+	LearningRate     float64               `json:"learning_rate"`
+	L2Regularization float64               `json:"l2_regularization"`
+	Epochs           int                   `json:"epochs"`
+	Parameters       map[string][]float64  `json:"parameters"`
 }
 
 // save a representation of v to the file at path.
@@ -79,19 +80,18 @@ func toNetwork(model model) NeuralModel {
 	}
 
 	// choice of activation function
-	activationFunction := activationSettings[model.ActivationName]
+	activationFunction := nncore.ActivationSettings[model.ActivationName]
 
 	// choice of output layer activation function and loss function
-	lossFunction := modeSettings[model.Mode].lossFunction
-	outputActivationFunction := modeSettings[model.Mode].outputActivation
+	configMode := nncore.ModeSettings[model.Mode]
 
 	return &neuralModel{
 		neuralNetwork: &neuralNetwork{
 			NNStructure:      model.NNStructure,
 			Activation:       activationFunction,
 			Mode:             model.Mode,
-			OutputActivation: outputActivationFunction,
-			LossFunction:     lossFunction,
+			OutputActivation: configMode.OutputActivation,
+			LossFunction:     configMode.LossFunction,
 			Parameters:       parameters,
 		},
 	}

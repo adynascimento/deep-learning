@@ -6,13 +6,14 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/adynascimento/deep-learning/nncore"
 	"gonum.org/v1/gonum/mat"
 )
 
 type model struct {
-	ActivationFunction activationType
-	Mode               modeType
-	Optimizer          optimizerType
+	ActivationFunction nncore.ActivationType
+	Mode               nncore.ModeType
+	Optimizer          nncore.OptimizerType
 	LearningRate       float64
 	L2Regularization   float64
 	Epochs             int
@@ -122,11 +123,10 @@ func Load(path string) CNNModel {
 
 func toNetwork(model model) CNNModel {
 	// choice of activation function
-	activationFunction := activationSettings[model.ActivationFunction]
+	activationFunction := nncore.ActivationSettings[model.ActivationFunction]
 
 	// choice of output layer activation function and loss function
-	lossFunction := modeSettings[model.Mode].lossFunction
-	outputActivationFunction := modeSettings[model.Mode].outputActivation
+	configMode := nncore.ModeSettings[model.Mode]
 
 	// load conv layers parameters
 	convLayers := []*convLayer{}
@@ -167,15 +167,15 @@ func toNetwork(model model) CNNModel {
 		cnn: &cnn{
 			Activation:       activationFunction,
 			Mode:             model.Mode,
-			OutputActivation: outputActivationFunction,
-			LossFunction:     lossFunction,
+			OutputActivation: configMode.OutputActivation,
+			LossFunction:     configMode.LossFunction,
 			ConvLayers:       convLayers,
 			PoolLayers:       model.PoolLayers,
 			DenseLayer: &denseLayer{
 				NNStructure:      model.DenseLayer.NNStructure,
 				Parameters:       denseParameters,
 				Activation:       activationFunction,
-				OutputActivation: outputActivationFunction,
+				OutputActivation: configMode.OutputActivation,
 			},
 		},
 	}

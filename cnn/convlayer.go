@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/adynascimento/deep-learning/ngo"
+	"github.com/adynascimento/deep-learning/nncore"
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"
 )
@@ -13,7 +14,7 @@ type convLayer struct {
 	OutputShape     [3]int
 	TrainableParams int
 	Parameters      parameters
-	Activation      activation
+	Activation      nncore.Activation
 	Gradients       gradients
 	Optimizer       convOptimizer
 	NFilters        int
@@ -42,7 +43,7 @@ type convConfig struct {
 	Stride      int
 }
 
-func newConvLayer(nFilters, filterSize, stride int, activation activation, optType optimizerType,
+func newConvLayer(nFilters, filterSize, stride int, activation nncore.Activation, optType nncore.OptimizerType,
 	inputShape, outputShape [3]int) *convLayer {
 	nChannels := inputShape[0]
 
@@ -72,7 +73,7 @@ func newConvLayer(nFilters, filterSize, stride int, activation activation, optTy
 
 	// choice of optimization algorithm
 	optimizer := convOptimizerSettings[optType]
-	if optType == AdamOptimizer {
+	if optType == nncore.AdamOptimizer {
 		optimizer.Adam = convInitializeAdam(filters)
 	}
 
@@ -96,13 +97,13 @@ func newConvLayer(nFilters, filterSize, stride int, activation activation, optTy
 	}
 }
 
-func initializeConvParameters(nFilters, nChannels, filterSize int, activation activation) [][]*mat.Dense {
+func initializeConvParameters(nFilters, nChannels, filterSize int, activation nncore.Activation) [][]*mat.Dense {
 	fanIn := nChannels * filterSize * filterSize
 	fanOut := nFilters * filterSize * filterSize
 
 	scalar := 1.0
 	switch activation.Name {
-	case ReLUActivation, EluActivation:
+	case nncore.ReLUActivation, nncore.EluActivation:
 		scalar = math.Sqrt(2.0 / float64(fanIn)) // He (Kaiming)
 	default: // tanh, sigmoid, softmax, linear...
 		scalar = math.Sqrt(2.0 / float64(fanIn+fanOut)) // Xavier (Glorot)

@@ -16,6 +16,7 @@ import (
 	"github.com/adynascimento/deep-learning/ngo"
 	"gonum.org/v1/gonum/mat"
 )
+import "github.com/adynascimento/deep-learning/nncore"
 
 func main() {
 	blas64.Use(netlib.Implementation{})
@@ -43,8 +44,8 @@ func main() {
 	// neural network model
 	neural := cnn.NewConvNeuralNetwork(cnn.CNNConfig{
 		InputShape: [3]int{1, 28, 28},
-		Activation: cnn.ReLUActivation,
-		Mode:       cnn.ModeMultiClass,
+		Activation: nncore.ReLUActivation,
+		Mode:       nncore.ModeMultiClass,
 	})
 	neural.AddConv2DLayer(16, 3, 1)
 	neural.AddMaxPooling2DLayer(2, 2)
@@ -54,9 +55,9 @@ func main() {
 
 	// optimizer to train the model
 	model := neural.NewTrainer(cnn.TrainerConfig{
-		Optimizer:    cnn.AdamOptimizer, // optimizer
-		LearningRate: 0.001,             // learning rate
-		Epochs:       20},               // number of iterations
+		Optimizer:    nncore.AdamOptimizer, // optimizer
+		LearningRate: 0.001,                // learning rate
+		Epochs:       20},                  // number of iterations
 		cnn.WithBatchSize(32),
 		cnn.WithL2Regularization(1.40e-06))
 	model.Summary()
