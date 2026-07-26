@@ -1,4 +1,4 @@
-package cnn
+package ngo
 
 import (
 	"gonum.org/v1/gonum/cmplxs"
@@ -6,6 +6,69 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
+// convolution operation between a matrix and a filter
+func Convolve2D(x, filter *mat.Dense, stride int) *mat.Dense {
+	xRows, xCols := x.Dims()
+	dARows, dACols := filter.Dims()
+	hOut := (xRows-dARows)/stride + 1
+	wOut := (xCols-dACols)/stride + 1
+
+	// convert image to column-based vector
+	im2col := Im2Col(x, dARows, dACols, stride)
+	flattenedFilter := Flatten(filter)
+
+	out := MatMul(flattenedFilter, im2col)
+	return Reshape(out, hOut, wOut)
+}
+
+// convert image to column-based vector
+func Im2Col(x *mat.Dense, filterRows, filterCols, stride int) *mat.Dense {
+	h, w := x.Dims()
+	hOut := (h-filterRows)/stride + 1
+	wOut := (w-filterCols)/stride + 1
+	cols := mat.NewDense(filterRows*filterCols, hOut*wOut, nil)
+
+	colIdx := 0
+	xValue := x.RawMatrix()
+	colsRaw := cols.RawMatrix()
+	for i := 0; i <= h-filterRows; i += stride {
+		for j := 0; j <= w-filterCols; j += stride {
+			for k := 0; k < filterRows; k++ {
+				for l := 0; l < filterCols; l++ {
+					xIndex := (i+k)*xValue.Cols + (j + l)
+					colsRaw.Data[(k*filterCols+l)*colsRaw.Stride+colIdx] = xValue.Data[xIndex]
+				}
+			}
+			colIdx++
+		}
+	}
+
+	return cols
+}
+
+// convert the column-based vector back to the original image matrix
+func Col2Im(cols *mat.Dense, inputRows, inputCols, filterRows, filterCols, stride int) *mat.Dense {
+	x := mat.NewDense(inputRows, inputCols, nil)
+
+	colIdx := 0
+	xValue := x.RawMatrix()
+	colsRaw := cols.RawMatrix()
+	for i := 0; i <= inputRows-filterRows; i += stride {
+		for j := 0; j <= inputCols-filterCols; j += stride {
+			for k := 0; k < filterRows; k++ {
+				for l := 0; l < filterCols; l++ {
+					xIndex := (i+k)*xValue.Cols + (j + l)
+					xValue.Data[xIndex] += colsRaw.Data[(k*filterCols+l)*colsRaw.Stride+colIdx]
+				}
+			}
+			colIdx++
+		}
+	}
+
+	return x
+}
+
+// convolution operation between a matrix and a filter using FFT
 func ConvolveFFT2D(x, filter *mat.Dense, stride int) *mat.Dense {
 	// pad input and filter to optimal size for FFT
 	xRows, xCols := x.Dims()
@@ -75,5 +138,6 @@ func extractOutputMatrix(m *mat.Dense, hOut, wOut, stride int) *mat.Dense {
 			out.Set(i, j, data[index])
 		}
 	}
+
 	return out
 }

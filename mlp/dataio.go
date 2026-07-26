@@ -38,17 +38,17 @@ func (nm *neuralModel) Save(path string) {
 
 func toModel(network neuralModel) model {
 	parameters := make(map[string][]float64)
-	for k, v := range network.Parameters {
+	for k, v := range network.Dense.Parameters {
 		parameters[k] = v.RawMatrix().Data
 	}
 
 	return model{
 		NNStructure:      network.NNStructure,
-		ActivationName:   network.Activation.Name,
-		Mode:             network.OutputActivation.Mode,
-		OptimizerName:    network.Optimizer.Name,
+		ActivationName:   network.Dense.Activation.Name,
+		Mode:             network.Dense.OutputActivation.Mode,
+		OptimizerName:    network.Dense.Optimizer.Name,
 		LearningRate:     network.LearningRate,
-		L2Regularization: network.L2Regularization,
+		L2Regularization: network.Dense.L2Regularization,
 		Epochs:           network.Epochs,
 		Parameters:       parameters,
 	}
@@ -80,19 +80,21 @@ func toNetwork(model model) NeuralModel {
 	}
 
 	// choice of activation function
-	activationFunction := nncore.ActivationSettings[model.ActivationName]
+	activation := nncore.ActivationSettings[model.ActivationName]
 
 	// choice of output layer activation function and loss function
 	configMode := nncore.ModeSettings[model.Mode]
 
 	return &neuralModel{
 		neuralNetwork: &neuralNetwork{
-			NNStructure:      model.NNStructure,
-			Activation:       activationFunction,
-			Mode:             model.Mode,
-			OutputActivation: configMode.OutputActivation,
-			LossFunction:     configMode.LossFunction,
-			Parameters:       parameters,
+			NNStructure:  model.NNStructure,
+			Mode:         model.Mode,
+			LossFunction: configMode.LossFunction,
+			Dense: &nncore.Dense{
+				Activation:       activation,
+				OutputActivation: configMode.OutputActivation,
+				Parameters:       parameters,
+			},
 		},
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/adynascimento/deep-learning/ngo"
@@ -16,70 +15,6 @@ import (
 	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/gonum/stat"
 )
-
-// forward propagation step
-func (nm *neuralModel) ForwardPropagation(x *mat.Dense, training bool) (*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense, map[string][]bool) {
-	L := len(nm.Parameters) / 2      // number of layers
-	Z := make(map[string]*mat.Dense) // linear function
-	A := make(map[string]*mat.Dense) // activation function
-	D := make(map[string][]bool)     // dropout masks (training only)
-	A[strconv.Itoa(0)] = x
-
-	for l := 0; l < L-1; l++ {
-		W := nm.Parameters["W"+strconv.Itoa(l+1)] // weights W
-		b := nm.Parameters["b"+strconv.Itoa(l+1)] // biases b
-
-		Z[strconv.Itoa(l+1)] = ngo.AddMatrixVector(ngo.MatMul(W, A[strconv.Itoa(l)]), b) // compute the linear operation
-		A[strconv.Itoa(l+1)] = nm.Activation.Function(Z[strconv.Itoa(l+1)])              // compute the non linear operation
-
-		// apply dropout
-		if training && nm.Dropout > 0 {
-			D[strconv.Itoa(l+1)] = nncore.DropoutMask(A[strconv.Itoa(l+1)], nm.Dropout)
-			nncore.ApplyDropoutMask(A[strconv.Itoa(l+1)], D[strconv.Itoa(l+1)], nm.Dropout)
-		}
-	}
-	// for output layer
-	Z[strconv.Itoa(L)] = ngo.AddMatrixVector(ngo.MatMul(nm.Parameters["W"+strconv.Itoa(L)],
-		A[strconv.Itoa(L-1)]), nm.Parameters["b"+strconv.Itoa(L)])
-	A[strconv.Itoa(L)] = nm.OutputActivation.Function(Z[strconv.Itoa(L)])
-
-	// prediction
-	yHat := A[strconv.Itoa(L)]
-
-	return yHat, Z, A, D
-}
-
-// backward propagation step
-func (nm *neuralModel) BackwardPropagation(Z, A map[string]*mat.Dense, D map[string][]bool, y *mat.Dense) (map[string]*mat.Dense, map[string]*mat.Dense) {
-	m := y.RawMatrix().Cols     // number of training examples
-	L := len(nm.Parameters) / 2 // number of layers
-
-	dZ := make(map[string]*mat.Dense) // derivatives of the linear function Z
-	dW := make(map[string]*mat.Dense) // derivatives of the weigths W
-	db := make(map[string]*mat.Dense) // derivatives of the biases b
-	dA := make(map[string]*mat.Dense) // derivatives of the activation function A
-
-	dZ[strconv.Itoa(L)] = ngo.Scale(1./float64(m), ngo.Sub(A[strconv.Itoa(L)], y))
-	dW[strconv.Itoa(L)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(L)], A[strconv.Itoa(L-1)].T()),
-		ngo.Scale(nm.L2Regularization/float64(m), nm.Parameters["W"+strconv.Itoa(L)]))
-	db[strconv.Itoa(L)] = ngo.Sum(dZ[strconv.Itoa(L)], ngo.OverColumns)
-
-	for l := L - 1; l > 0; l-- {
-		dA[strconv.Itoa(l)] = ngo.MatMul(nm.Parameters["W"+strconv.Itoa(l+1)].T(), dZ[strconv.Itoa(l+1)])
-
-		// apply dropout
-		if nm.Dropout > 0 {
-			nncore.ApplyDropoutMask(dA[strconv.Itoa(l)], D[strconv.Itoa(l)], nm.Dropout)
-		}
-
-		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], nm.Activation.Derivative(Z[strconv.Itoa(l)]))
-		dW[strconv.Itoa(l)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(l)], A[strconv.Itoa(l-1)].T()),
-			ngo.Scale(nm.L2Regularization/float64(m), nm.Parameters["W"+strconv.Itoa(l)]))
-		db[strconv.Itoa(l)] = ngo.Sum(dZ[strconv.Itoa(l)], ngo.OverColumns)
-	}
-
-	return dW, db
-}
 
 // performs model training using the xTrain and yTrain matrices.
 // both matrices have shape (nFeatures, nSamples), where each row
@@ -119,18 +54,17 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig
 			yBatch := yTrain.Slice(0, yTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)
 
 			// forward propagation
-			yHat, Z, A, D := nm.ForwardPropagation(xBatch, true)
+			yHat, Z, A, D := nm.Dense.ForwardPropagation(xBatch, true)
 
 			// loss function
-			loss := nm.LossFunction(yHat, yBatch, nm.Parameters, nm.L2Regularization)
+			loss := nm.LossFunction(yHat, yBatch, nm.Dense.Parameters, nm.Dense.L2Regularization)
 			lossBatches = append(lossBatches, loss)
 
 			// backward propagation
-			dW, db := nm.BackwardPropagation(Z, A, D, yBatch)
+			_, dW, db := nm.Dense.BackwardPropagation(Z, A, D, yBatch)
 
 			// update parameters (optimization algorithm)
-			nm.Parameters = nm.Optimizer.Function(&nm.Optimizer, nm.Parameters, dW, db,
-				nm.LearningRate, float64(i))
+			nm.Dense.UpdateParameters(dW, db, nm.LearningRate)
 		}
 
 		// print the loss every x iterations
@@ -151,7 +85,7 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig
 
 // predictions with forward propagation
 func (nm *neuralModel) Predict(x *mat.Dense) *mat.Dense {
-	predictions, _, _, _ := nm.ForwardPropagation(x, false)
+	predictions, _, _, _ := nm.Dense.ForwardPropagation(x, false)
 	return predictions
 }
 

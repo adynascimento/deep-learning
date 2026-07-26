@@ -167,7 +167,7 @@ func (cl *convLayer) ForwardPropagation(x []*mat.Dense) ([]*mat.Dense, []*mat.De
 	xBig := mat.NewDense(nChannels*K, P, nil)
 	for c := 0; c < nChannels; c++ {
 		// xCol will have a shape: K x P
-		xCol := Im2Col(x[c], cl.FilterSize, cl.FilterSize, stride)
+		xCol := ngo.Im2Col(x[c], cl.FilterSize, cl.FilterSize, stride)
 
 		raw := xCol.RawMatrix()
 		for k := 0; k < K; k++ {
@@ -264,7 +264,7 @@ func (cl *convLayer) BackwardWeightGradients(x []*mat.Dense, dZBig *mat.Dense, s
 	xBig := mat.NewDense(nChannels*K, P, nil)
 	for c := 0; c < nChannels; c++ {
 		// xCol will have a shape: K x P
-		xCol := Im2Col(x[c], cl.FilterSize, cl.FilterSize, stride)
+		xCol := ngo.Im2Col(x[c], cl.FilterSize, cl.FilterSize, stride)
 
 		raw := xCol.RawMatrix()
 		for k := 0; k < K; k++ {
@@ -335,7 +335,7 @@ func (cl *convLayer) BackwardInputGradients(dZBig *mat.Dense, stride int) []*mat
 		}
 
 		// reconstruct the spatial gradient of this input channel.
-		dxPrev[c] = Col2Im(xCol, cl.InputShape[1], cl.InputShape[2], cl.FilterSize, cl.FilterSize, stride)
+		dxPrev[c] = ngo.Col2Im(xCol, cl.InputShape[1], cl.InputShape[2], cl.FilterSize, cl.FilterSize, stride)
 	}
 
 	return dxPrev

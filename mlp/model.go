@@ -33,22 +33,17 @@ type TrainerConfig struct {
 }
 
 type neuralNetwork struct {
-	NNStructure      []int
-	Activation       nncore.Activation
-	Mode             nncore.ModeType
-	OutputActivation nncore.OutputActivation
-	LossFunction     nncore.LossFunction
-	Parameters       map[string]*mat.Dense
+	NNStructure  []int
+	Mode         nncore.ModeType
+	LossFunction nncore.LossFunction
+	Dense        *nncore.Dense
 }
 
 type neuralModel struct {
 	*neuralNetwork
-	Optimizer        nncore.Optimizer
-	LearningRate     float64
-	L2Regularization float64
-	Dropout          float64
-	Epochs           int
-	BatchSize        int
+	LearningRate float64
+	Epochs       int
+	BatchSize    int
 }
 
 type fitConfig struct {
@@ -63,33 +58,30 @@ func NewNeuralNetwork(config NeuralConfig) NeuralNetwork {
 	// choice of output layer activation function and loss function
 	configMode := nncore.ModeSettings[config.Mode]
 
-	// initializing the model parameters
-	parameters := nncore.InitializeDenseParameters(config.NNStructure, activation)
-
-	return &neuralNetwork{
+	// initializing denseLayer layer
+	denseLayer := nncore.NewDense(nncore.DenseConfig{
 		NNStructure:      config.NNStructure,
 		Activation:       activation,
-		Mode:             config.Mode,
 		OutputActivation: configMode.OutputActivation,
-		LossFunction:     configMode.LossFunction,
-		Parameters:       parameters,
+	})
+
+	return &neuralNetwork{
+		NNStructure:  config.NNStructure,
+		Mode:         config.Mode,
+		LossFunction: configMode.LossFunction,
+		Dense:        denseLayer,
 	}
 }
 
 func (nn *neuralNetwork) NewTrainer(config TrainerConfig, options ...func(*neuralModel)) NeuralModel {
-	// choice of optimization algorithm
-	optimizer := nncore.OptimizerSettings[config.Optimizer]
-	if config.Optimizer == nncore.AdamOptimizer {
-		optimizer.Adam = nncore.InitializeAdam(nn.Parameters)
-	}
-
 	model := neuralModel{
 		neuralNetwork: nn,
-		Optimizer:     optimizer,
 		LearningRate:  config.LearningRate,
 		Epochs:        config.Epochs,
 		BatchSize:     32,
 	}
+	// choice of optimization algorithm
+	model.Dense.Optimizer = nncore.NewOptimizer(config.Optimizer, nn.Dense.Parameters)
 
 	// apply additional options
 	for _, option := range options {
@@ -107,13 +99,13 @@ func WithBatchSize(batchSize int) func(*neuralModel) {
 
 func WithL2Regularization(lambd float64) func(*neuralModel) {
 	return func(nm *neuralModel) {
-		nm.L2Regularization = lambd
+		nm.Dense.L2Regularization = lambd
 	}
 }
 
 func WithDropout(dropout float64) func(*neuralModel) {
 	return func(nm *neuralModel) {
-		nm.Dropout = dropout
+		nm.Dense.Dropout = dropout
 	}
 }
 

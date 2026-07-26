@@ -18,7 +18,7 @@ import (
 )
 
 // cnn forward propagation step
-func (cm *cnnModel) ForwardPropagation(x [][]*mat.Dense) (*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense) {
+func (cm *cnnModel) ForwardPropagation(x [][]*mat.Dense, training bool) (*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense, map[string][]bool) {
 	nTraining := len(x)
 
 	for i := range cm.ConvLayers {
@@ -68,17 +68,19 @@ func (cm *cnnModel) ForwardPropagation(x [][]*mat.Dense) (*mat.Dense, map[string
 
 	// fully connected layer step
 	// input dimension features (flatten layer output)
-	yPred, Z, A := cm.DenseLayer.ForwardPropagation(flattened)
+	yPred, Z, A, D := cm.DenseLayer.ForwardPropagation(flattened, training)
 
-	return yPred, Z, A
+	return yPred, Z, A, D
 }
 
 // cnn backward propagation step
-func (cm *cnnModel) BackwardPropagation(Z, A map[string]*mat.Dense, yTrue *mat.Dense) {
+func (cm *cnnModel) BackwardPropagation(Z, A map[string]*mat.Dense, D map[string][]bool, yTrue *mat.Dense) {
 	nTraining := len(cm.ConvOutputs["convI1"])
 
 	// fully connected layer step
-	dOutDense := cm.DenseLayer.BackwardPropagation(Z, A, yTrue, cm.LearningRate, cm.L2Regularization)
+	// update dense parameters (optimization algorithm)
+	dOutDense, dW, db := cm.DenseLayer.BackwardPropagation(Z, A, D, yTrue)
+	cm.DenseLayer.UpdateParameters(dW, db, cm.LearningRate)
 
 	// flatten step
 	dOutFlatten := cm.FlattenLayer.BackwardPropagation(dOutDense)
@@ -166,7 +168,7 @@ func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...fun
 			yBatch := yTrain.Slice(0, yTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)
 
 			// forward propagation
-			yPred, Z, A := cm.ForwardPropagation(xBatch)
+			yPred, Z, A, D := cm.ForwardPropagation(xBatch, true)
 
 			// loss function
 			loss := cm.LossFunction(yPred, yBatch, cm.DenseLayer.Parameters, cm.L2Regularization)
@@ -174,7 +176,7 @@ func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...fun
 			weights = append(weights, float64(len(xBatch)))
 
 			// backward propagation with update parameters (optimization algorithm)
-			cm.BackwardPropagation(Z, A, yBatch)
+			cm.BackwardPropagation(Z, A, D, yBatch)
 		}
 
 		// print the loss every x iterations
@@ -191,7 +193,7 @@ func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...fun
 
 // predictions with forward propagation
 func (cm *cnnModel) Predict(x [][]*mat.Dense) *mat.Dense {
-	predictions, _, _ := cm.ForwardPropagation(x)
+	predictions, _, _, _ := cm.ForwardPropagation(x, false)
 	return predictions
 }
 
@@ -252,12 +254,12 @@ func (cm *cnnModel) Summary() {
 		}
 	}
 	data = append(data, []string{
-		"Flatten Layer", fmt.Sprintf("(None, %d)", cm.DenseLayer.NNStructure[0]), "0",
+		"Flatten Layer", fmt.Sprintf("(None, %d)", cm.DenseLayerStructure[0]), "0",
 	})
-	for i, v := range cm.DenseLayer.NNStructure[1:] {
+	for i, v := range cm.DenseLayerStructure[1:] {
 		data = append(data, []string{
 			fmt.Sprintf("Dense Layer %d", i+1), fmt.Sprintf("(None, %d)", v), fmt.Sprintf("%d",
-				cm.DenseLayer.NNStructure[i]*cm.DenseLayer.NNStructure[i+1]+cm.DenseLayer.NNStructure[i+1]),
+				cm.DenseLayerStructure[i]*cm.DenseLayerStructure[i+1]+cm.DenseLayerStructure[i+1]),
 		})
 	}
 

@@ -100,7 +100,7 @@ func toModel(cm cnnModel) model {
 		ConvLayers:         convLayers,
 		PoolLayers:         cm.PoolLayers,
 		DenseLayer: saveDenseLayer{
-			NNStructure: cm.DenseLayer.NNStructure,
+			NNStructure: cm.DenseLayerStructure,
 			Parameters:  denseParameters,
 		},
 	}
@@ -123,7 +123,7 @@ func Load(path string) CNNModel {
 
 func toNetwork(model model) CNNModel {
 	// choice of activation function
-	activationFunction := nncore.ActivationSettings[model.ActivationFunction]
+	activation := nncore.ActivationSettings[model.ActivationFunction]
 
 	// choice of output layer activation function and loss function
 	configMode := nncore.ModeSettings[model.Mode]
@@ -148,7 +148,7 @@ func toNetwork(model model) CNNModel {
 				W: w,
 				B: mat.NewDense(v.NFilters, 1, v.Parameters.B),
 			},
-			Activation: activationFunction,
+			Activation: activation,
 			Stride:     v.Stride,
 		})
 	}
@@ -165,18 +165,18 @@ func toNetwork(model model) CNNModel {
 
 	return &cnnModel{
 		cnn: &cnn{
-			Activation:       activationFunction,
+			Activation:       activation,
 			Mode:             model.Mode,
 			OutputActivation: configMode.OutputActivation,
 			LossFunction:     configMode.LossFunction,
 			ConvLayers:       convLayers,
 			PoolLayers:       model.PoolLayers,
-			DenseLayer: &denseLayer{
-				NNStructure:      model.DenseLayer.NNStructure,
-				Parameters:       denseParameters,
-				Activation:       activationFunction,
+			DenseLayer: &nncore.Dense{
+				Activation:       activation,
 				OutputActivation: configMode.OutputActivation,
+				Parameters:       denseParameters,
 			},
+			DenseLayerStructure: model.DenseLayer.NNStructure,
 		},
 	}
 }

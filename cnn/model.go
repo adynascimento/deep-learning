@@ -50,7 +50,7 @@ type cnn struct {
 	ConvConfigs         []convConfig
 	PoolLayers          []*poolLayer
 	FlattenLayer        *flatten
-	DenseLayer          *denseLayer
+	DenseLayer          *nncore.Dense
 	DenseLayerStructure []int
 }
 
@@ -62,7 +62,6 @@ type cnnModel struct {
 	Optimizer        nncore.OptimizerType
 	LearningRate     float64
 	L2Regularization float64
-	Dropout          float64
 	Epochs           int
 	BatchSize        int
 }
@@ -142,7 +141,12 @@ func (c *cnn) NewTrainer(config TrainerConfig, options ...func(*cnnModel)) CNNMo
 	c.FlattenLayer = newFlatten()
 
 	// add fully connected layer
-	c.DenseLayer = newDenseLayer(c.DenseLayerStructure, c.Activation, c.OutputActivation, config.Optimizer)
+	c.DenseLayer = nncore.NewDense(nncore.DenseConfig{
+		NNStructure:      c.DenseLayerStructure,
+		Activation:       c.Activation,
+		OutputActivation: c.OutputActivation,
+	})
+	c.DenseLayer.Optimizer = nncore.NewOptimizer(config.Optimizer, c.DenseLayer.Parameters)
 
 	// each worker accumulates its own local gradients in the backward propagation
 	// for a subset of the training samples before the final gradient reduction
@@ -189,12 +193,13 @@ func WithBatchSize(batchSize int) func(*cnnModel) {
 func WithL2Regularization(lambd float64) func(*cnnModel) {
 	return func(nm *cnnModel) {
 		nm.L2Regularization = lambd
+		nm.DenseLayer.L2Regularization = lambd
 	}
 }
 
 func WithDropout(dropout float64) func(*cnnModel) {
 	return func(nm *cnnModel) {
-		nm.Dropout = dropout
+		nm.DenseLayer.Dropout = dropout
 	}
 }
 
