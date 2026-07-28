@@ -7,58 +7,6 @@ import (
 	"gonum.org/v1/gonum/mat"
 )
 
-var ActivationSettings = map[ActivationType]Activation{
-	TanhActivation: {
-		Name:       TanhActivation,
-		Function:   Tanh,
-		Derivative: TanhDerivative,
-	},
-	SigmoidActivation: {
-		Name:       SigmoidActivation,
-		Function:   Sigmoid,
-		Derivative: SigmoidDerivative,
-	},
-	EluActivation: {
-		Name:       EluActivation,
-		Function:   Elu,
-		Derivative: EluDerivative,
-	},
-	ReLUActivation: {
-		Name:       ReLUActivation,
-		Function:   ReLU,
-		Derivative: ReLUDerivative,
-	},
-}
-
-var ModeSettings = map[ModeType]ConfigMode{
-	ModeRegression: {
-		OutputActivation: OutputActivation{
-			Mode:     ModeRegression,
-			Function: ApplyLinear,
-		},
-		LossFunction: MeanSquaredError,
-	},
-	ModeMultiClass: {
-		OutputActivation: OutputActivation{
-			Mode:     ModeMultiClass,
-			Function: ApplySoftmax,
-		},
-		LossFunction: CrossEntropy,
-	},
-	ModeMultiLabel: {
-		OutputActivation: OutputActivation{
-			Mode:     ModeMultiLabel,
-			Function: ApplySigmoid,
-		},
-		LossFunction: BinaryCrossEntropy,
-	},
-}
-
-type ConfigMode struct {
-	OutputActivation OutputActivation
-	LossFunction     LossFunction
-}
-
 type ActivationType string
 type ActivationFunction func(*mat.Dense) *mat.Dense
 
@@ -80,6 +28,80 @@ type Activation struct {
 	Name       ActivationType
 	Function   ActivationFunction
 	Derivative ActivationFunction
+}
+
+type Mode struct {
+	OutputActivation OutputActivation
+	LossFunction     LossFunction
+}
+
+func NewActivation(actType ActivationType) Activation {
+	switch actType {
+	case TanhActivation:
+		return Activation{
+			Name:       TanhActivation,
+			Function:   Tanh,
+			Derivative: TanhDerivative,
+		}
+
+	case SigmoidActivation:
+		return Activation{
+			Name:       SigmoidActivation,
+			Function:   Sigmoid,
+			Derivative: SigmoidDerivative,
+		}
+
+	case EluActivation:
+		return Activation{
+			Name:       EluActivation,
+			Function:   Elu,
+			Derivative: EluDerivative,
+		}
+
+	case ReLUActivation:
+		return Activation{
+			Name:       ReLUActivation,
+			Function:   ReLU,
+			Derivative: ReLUDerivative,
+		}
+
+	default:
+		panic("activation not implemented")
+	}
+}
+
+func NewMode(mode ModeType) Mode {
+	switch mode {
+	case ModeRegression:
+		return Mode{
+			OutputActivation: OutputActivation{
+				Mode:     ModeRegression,
+				Function: Linear,
+			},
+			LossFunction: MeanSquaredError,
+		}
+
+	case ModeMultiClass:
+		return Mode{
+			OutputActivation: OutputActivation{
+				Mode:     ModeMultiClass,
+				Function: Softmax,
+			},
+			LossFunction: CrossEntropy,
+		}
+
+	case ModeMultiLabel:
+		return Mode{
+			OutputActivation: OutputActivation{
+				Mode:     ModeMultiLabel,
+				Function: Sigmoid,
+			},
+			LossFunction: BinaryCrossEntropy,
+		}
+
+	default:
+		panic("mode not implemented")
+	}
 }
 
 // implements the Tanh function for use in activation functions.
@@ -174,21 +196,16 @@ type OutputActivation struct {
 }
 
 // applies linear function for output layer
-func ApplyLinear(a *mat.Dense) *mat.Dense {
+func Linear(a *mat.Dense) *mat.Dense {
 	return ngo.Apply(func(_, _ int, v float64) float64 { return v }, a)
 }
 
 // applies softmax function for output layer
-func ApplySoftmax(a *mat.Dense) *mat.Dense {
+func Softmax(a *mat.Dense) *mat.Dense {
 	exp := ngo.Apply(func(_, _ int, v float64) float64 { return math.Exp(v) }, a)
 	sum := ngo.Sum(exp, ngo.OverRows)
 
 	return ngo.DivMatrixVector(exp, sum)
-}
-
-// applies sigmoid function for output layer
-func ApplySigmoid(a *mat.Dense) *mat.Dense {
-	return ngo.Apply(func(_, _ int, v float64) float64 { return SigmoidScalar(v) }, a)
 }
 
 // implements the sigmoid function for use in activation functions.

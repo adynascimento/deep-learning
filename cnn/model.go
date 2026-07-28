@@ -78,14 +78,14 @@ type fitConfig struct {
 
 func NewConvNeuralNetwork(config CNNConfig) CNN {
 	// choice of activation function
-	activationFunction := nncore.ActivationSettings[config.Activation]
+	activation := nncore.NewActivation(config.Activation)
 
 	// choice of output layer activation function and loss function
-	configMode := nncore.ModeSettings[config.Mode]
+	configMode := nncore.NewMode(config.Mode)
 
 	return &cnn{
 		InputShape:       config.InputShape,
-		Activation:       activationFunction,
+		Activation:       activation,
 		Mode:             config.Mode,
 		OutputActivation: configMode.OutputActivation,
 		LossFunction:     configMode.LossFunction,

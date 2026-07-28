@@ -80,10 +80,10 @@ func toNetwork(model model) NeuralModel {
 	}
 
 	// choice of activation function
-	activation := nncore.ActivationSettings[model.ActivationName]
+	activation := nncore.NewActivation(model.ActivationName)
 
 	// choice of output layer activation function and loss function
-	configMode := nncore.ModeSettings[model.Mode]
+	configMode := nncore.NewMode(model.Mode)
 
 	return &neuralModel{
 		neuralNetwork: &neuralNetwork{

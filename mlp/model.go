@@ -55,10 +55,10 @@ type fitConfig struct {
 
 func NewNeuralNetwork(config NeuralConfig) NeuralNetwork {
 	// choice of activation function
-	activation := nncore.ActivationSettings[config.Activation]
+	activation := nncore.NewActivation(config.Activation)
 
 	// choice of output layer activation function and loss function
-	configMode := nncore.ModeSettings[config.Mode]
+	configMode := nncore.NewMode(config.Mode)
 
 	return &neuralNetwork{
 		NNStructure:      config.NNStructure,

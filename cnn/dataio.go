@@ -123,10 +123,10 @@ func Load(path string) CNNModel {
 
 func toNetwork(model model) CNNModel {
 	// choice of activation function
-	activation := nncore.ActivationSettings[model.ActivationFunction]
+	activation := nncore.NewActivation(model.ActivationFunction)
 
 	// choice of output layer activation function and loss function
-	configMode := nncore.ModeSettings[model.Mode]
+	configMode := nncore.NewMode(model.Mode)
 
 	// load conv layers parameters
 	convLayers := []*convLayer{}
