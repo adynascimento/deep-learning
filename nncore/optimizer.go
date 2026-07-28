@@ -2,118 +2,102 @@ package nncore
 
 import (
 	"math"
-	"strconv"
 
 	"github.com/adynascimento/deep-learning/ngo"
 	"gonum.org/v1/gonum/mat"
 )
 
 type OptimizerType string
-type OptimizerFunction func(*Optimizer, map[string]*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense, float64, float64)
 
 const (
 	AdamOptimizer            OptimizerType = "adam"
 	GradientDescentOptimizer OptimizerType = "gradientdescent"
 )
 
-type Optimizer struct {
-	Name     OptimizerType
-	Function OptimizerFunction
-
-	adam AdamState
+type Optimizer interface {
+	Name() OptimizerType
+	Step(parameters []*Parameter, learningRate, t float64)
 }
 
-type AdamState struct {
-	v map[string]*mat.Dense
-	s map[string]*mat.Dense
+type Parameter struct {
+	Value    *mat.Dense
+	Gradient *mat.Dense
+	Update   func(*mat.Dense) // callback function to update the source parameter
 }
 
-func NewOptimizer(optType OptimizerType, parameters map[string]*mat.Dense) Optimizer {
+func NewOptimizer(optType OptimizerType) Optimizer {
 	switch optType {
 	case GradientDescentOptimizer:
-		return Optimizer{
-			Name:     optType,
-			Function: gradientDescentOptimizer,
-		}
+		return &gradientDescentOptimizer{}
 
 	case AdamOptimizer:
-		return Optimizer{
-			Name:     optType,
-			Function: adamOptimizer,
-			adam:     initializeAdam(parameters),
-		}
+		return &adamOptimizer{}
 
 	default:
 		panic("optimizer not implemented")
 	}
 }
 
-// update the parameters (gradient descent)
-func gradientDescentOptimizer(opt *Optimizer, parameters, dW, db map[string]*mat.Dense, learningRate, t float64) {
-	L := len(parameters) / 2 // number of layers
+type gradientDescentOptimizer struct{}
 
-	for l := 0; l < L; l++ {
-		parameters["W"+strconv.Itoa(l+1)] = ngo.Sub(parameters["W"+strconv.Itoa(l+1)], ngo.Scale(learningRate, dW[strconv.Itoa(l+1)]))
-		parameters["b"+strconv.Itoa(l+1)] = ngo.Sub(parameters["b"+strconv.Itoa(l+1)], ngo.Scale(learningRate, db[strconv.Itoa(l+1)]))
+func (opt *gradientDescentOptimizer) Name() OptimizerType {
+	return GradientDescentOptimizer
+}
+
+// update the parameters (gradient descent)
+func (opt *gradientDescentOptimizer) Step(parameters []*Parameter, learningRate, t float64) {
+	for _, p := range parameters {
+		p.Value = ngo.Sub(p.Value, ngo.Scale(learningRate, p.Gradient))
+		p.Update(p.Value)
 	}
 }
 
+type adamOptimizer struct {
+	v []*mat.Dense
+	s []*mat.Dense
+}
+
+func (opt *adamOptimizer) Name() OptimizerType {
+	return AdamOptimizer
+}
+
 // update the parameters (adam optimizer)
-func adamOptimizer(opt *Optimizer, parameters, dW, db map[string]*mat.Dense, learningRate, t float64) {
+func (opt *adamOptimizer) Step(parameters []*Parameter, learningRate, t float64) {
+	// initializing adam states
+	if len(opt.v) == 0 {
+		opt.v = make([]*mat.Dense, len(parameters))
+		opt.s = make([]*mat.Dense, len(parameters))
+
+		for i, p := range parameters {
+			r, c := p.Value.Dims()
+			opt.v[i] = mat.NewDense(r, c, nil)
+			opt.s[i] = mat.NewDense(r, c, nil)
+		}
+	}
+
 	// default parameters
 	beta1 := 0.9
 	beta2 := 0.999
 	epsilon := 1e-08
 
-	vCorr := make(map[string]*mat.Dense) // map containing the parameters
-	sCorr := make(map[string]*mat.Dense) // map containing the parameters
-
-	L := len(parameters) / 2 // number of layers
-
-	applySqrt := func(_, _ int, v float64) float64 { return math.Sqrt(v) }
-	for l := 0; l < L; l++ {
+	for i, p := range parameters {
 		// moving average of the gradients
-		opt.adam.v["dW"+strconv.Itoa(l+1)] = ngo.Add(ngo.Scale(beta1, opt.adam.v["dW"+strconv.Itoa(l+1)]), ngo.Scale((1-beta1), dW[strconv.Itoa(l+1)]))
-		opt.adam.v["db"+strconv.Itoa(l+1)] = ngo.Add(ngo.Scale(beta1, opt.adam.v["db"+strconv.Itoa(l+1)]), ngo.Scale((1-beta1), db[strconv.Itoa(l+1)]))
-
-		// compute bias-corrected first moment estimate
-		vCorr["dW"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0-math.Pow(beta1, t)), opt.adam.v["dW"+strconv.Itoa(l+1)])
-		vCorr["db"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0-math.Pow(beta1, t)), opt.adam.v["db"+strconv.Itoa(l+1)])
+		opt.v[i] = ngo.Add(ngo.Scale(beta1, opt.v[i]), ngo.Scale((1-beta1), p.Gradient))
 
 		// moving average of the squared gradients
-		opt.adam.s["dW"+strconv.Itoa(l+1)] = ngo.Add(ngo.Scale(beta2, opt.adam.s["dW"+strconv.Itoa(l+1)]), ngo.Scale((1.0-beta2), ngo.Square(dW[strconv.Itoa(l+1)])))
-		opt.adam.s["db"+strconv.Itoa(l+1)] = ngo.Add(ngo.Scale(beta2, opt.adam.s["db"+strconv.Itoa(l+1)]), ngo.Scale((1.0-beta2), ngo.Square(db[strconv.Itoa(l+1)])))
+		opt.s[i] = ngo.Add(ngo.Scale(beta2, opt.s[i]), ngo.Scale((1.0-beta2), ngo.Square(p.Gradient)))
+
+		// compute bias-corrected first moment estimate
+		vCorr := ngo.Scale(1.0/(1.0-math.Pow(beta1, t)), opt.v[i])
 
 		// compute bias-corrected second raw moment estimate
-		sCorr["dW"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0-math.Pow(beta2, t)), opt.adam.s["dW"+strconv.Itoa(l+1)])
-		sCorr["db"+strconv.Itoa(l+1)] = ngo.Scale(1.0/(1.0-math.Pow(beta2, t)), opt.adam.s["db"+strconv.Itoa(l+1)])
+		sCorr := ngo.Scale(1.0/(1.0-math.Pow(beta2, t)), opt.s[i])
 
-		sqrtW := ngo.Apply(func(_, _ int, v float64) float64 { return v + epsilon }, ngo.Apply(applySqrt, sCorr["dW"+strconv.Itoa(l+1)]))
-		sqrtb := ngo.Apply(func(_, _ int, v float64) float64 { return v + epsilon }, ngo.Apply(applySqrt, sCorr["db"+strconv.Itoa(l+1)]))
+		// update parameter
+		sqrtV := ngo.Apply(func(_, _ int, x float64) float64 { return math.Sqrt(x) + epsilon }, sCorr)
+		p.Value = ngo.Sub(p.Value, ngo.Scale(learningRate, ngo.DivElem(vCorr, sqrtV)))
 
-		parameters["W"+strconv.Itoa(l+1)] = ngo.Sub(parameters["W"+strconv.Itoa(l+1)], ngo.Scale(learningRate, ngo.DivElem(vCorr["dW"+strconv.Itoa(l+1)], sqrtW)))
-		parameters["b"+strconv.Itoa(l+1)] = ngo.Sub(parameters["b"+strconv.Itoa(l+1)], ngo.Scale(learningRate, ngo.DivElem(vCorr["db"+strconv.Itoa(l+1)], sqrtb)))
-	}
-}
-
-// initializing the adam model parameters
-func initializeAdam(parameters map[string]*mat.Dense) AdamState {
-	L := len(parameters) / 2         // number of layers
-	v := make(map[string]*mat.Dense) // map containing the parameters
-	s := make(map[string]*mat.Dense) // map containing the parameters
-
-	for l := 0; l < L; l++ {
-		nw, mw := parameters["W"+strconv.Itoa(l+1)].Dims()
-		nb, mb := parameters["b"+strconv.Itoa(l+1)].Dims()
-
-		v["dW"+strconv.Itoa(l+1)] = mat.NewDense(nw, mw, nil)
-		v["db"+strconv.Itoa(l+1)] = mat.NewDense(nb, mb, nil)
-		s["dW"+strconv.Itoa(l+1)] = mat.NewDense(nw, mw, nil)
-		s["db"+strconv.Itoa(l+1)] = mat.NewDense(nb, mb, nil)
-	}
-
-	return AdamState{
-		v: v,
-		s: s,
+		// update source parameter
+		p.Update(p.Value)
 	}
 }

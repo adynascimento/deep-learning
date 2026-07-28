@@ -46,7 +46,7 @@ func toModel(network neuralModel) model {
 		NNStructure:      network.NNStructure,
 		ActivationName:   network.Dense.Activation.Name,
 		Mode:             network.Dense.OutputActivation.Mode,
-		OptimizerName:    network.Dense.Optimizer.Name,
+		OptimizerName:    network.Dense.Optimizer.Name(),
 		LearningRate:     network.LearningRate,
 		L2Regularization: network.Dense.L2Regularization,
 		Epochs:           network.Epochs,

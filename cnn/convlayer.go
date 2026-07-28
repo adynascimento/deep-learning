@@ -16,7 +16,7 @@ type convLayer struct {
 	Parameters      parameters
 	Activation      nncore.Activation
 	Gradients       gradients
-	Optimizer       convOptimizer
+	Optimizer       nncore.Optimizer
 	NFilters        int
 	NChannels       int
 	FilterSize      int
@@ -43,22 +43,27 @@ type convConfig struct {
 	Stride      int
 }
 
-func newConvLayer(nFilters, filterSize, stride int, activation nncore.Activation, optType nncore.OptimizerType,
-	inputShape, outputShape [3]int) *convLayer {
-	nChannels := inputShape[0]
+type convLayerConfig struct {
+	convConfig
+	Activation nncore.Activation
+	Optimizer  nncore.OptimizerType
+}
+
+func newConvLayer(config convLayerConfig) *convLayer {
+	nChannels := config.InputShape[0]
 
 	// initialize convolutional neural network
 	// filters with shape (nFilters, nChannels, filterSize, filterSize)
-	filters := initializeConvParameters(nFilters, nChannels, filterSize, activation)
+	filters := initializeConvParameters(config.NFilters, nChannels, config.FilterSize, config.Activation)
 
 	// K is the number of weights per input channel
-	K := filterSize * filterSize
+	K := config.FilterSize * config.FilterSize
 
 	// wBig will have a shape: nFilters x nChannels*K.
 	// each row contains one filter flattened across all input channels.
 	// each block of K values corresponds to one input channel.
-	wBig := mat.NewDense(nFilters, nChannels*K, nil)
-	for f := 0; f < nFilters; f++ {
+	wBig := mat.NewDense(config.NFilters, nChannels*K, nil)
+	for f := 0; f < config.NFilters; f++ {
 		row := wBig.RawRowView(f)
 		for c := 0; c < nChannels; c++ {
 			copy(
@@ -69,30 +74,27 @@ func newConvLayer(nFilters, filterSize, stride int, activation nncore.Activation
 	}
 
 	// initialize gradients
-	gradients := newGradients(nFilters, nChannels, filterSize)
+	gradients := newGradients(config.NFilters, nChannels, config.FilterSize)
 
 	// choice of optimization algorithm
-	optimizer := convOptimizerSettings[optType]
-	if optType == nncore.AdamOptimizer {
-		optimizer.Adam = convInitializeAdam(filters)
-	}
+	optimizer := nncore.NewOptimizer(config.Optimizer)
 
 	return &convLayer{
-		InputShape:      inputShape,
-		OutputShape:     outputShape,
-		TrainableParams: nFilters * (filterSize*filterSize*nChannels + 1),
+		InputShape:      config.InputShape,
+		OutputShape:     config.OutputShape,
+		TrainableParams: config.NFilters * (config.FilterSize*config.FilterSize*nChannels + 1),
 		Parameters: parameters{
 			W:    filters,
-			B:    mat.NewDense(nFilters, 1, nil),
+			B:    mat.NewDense(config.NFilters, 1, nil),
 			wBig: wBig,
 		},
-		Activation: activation,
+		Activation: config.Activation,
 		Gradients:  gradients,
 		Optimizer:  optimizer,
-		NFilters:   nFilters,
+		NFilters:   config.NFilters,
 		NChannels:  nChannels,
-		FilterSize: filterSize,
-		Stride:     stride,
+		FilterSize: config.FilterSize,
+		Stride:     config.Stride,
 		Iter:       1,
 	}
 }
@@ -367,8 +369,7 @@ func (cl *convLayer) ReduceWorkerGradients(workerGradients []gradients) {
 
 // update parameters (optimization algorithm)
 func (cl *convLayer) UpdateParameters(learningRate float64) {
-	cl.Parameters = cl.Optimizer.Function(&cl.Optimizer, cl.Parameters, cl.Gradients.DW,
-		cl.Gradients.DB, learningRate, cl.Iter)
+	cl.Optimizer.Step(cl.TrainableParameters(), learningRate, cl.Iter)
 	cl.Iter++
 
 	// K is the number of weights per input channel
@@ -392,4 +393,32 @@ func (cl *convLayer) UpdateParameters(learningRate float64) {
 		}
 	}
 	cl.Gradients.DB.Zero()
+}
+
+func (cl *convLayer) TrainableParameters() []*nncore.Parameter {
+	nFilters := len(cl.Parameters.W)
+	nChannels := len(cl.Parameters.W[0])
+
+	params := []*nncore.Parameter{}
+	for f := 0; f < nFilters; f++ {
+		for c := 0; c < nChannels; c++ {
+			params = append(params, &nncore.Parameter{
+				Value:    cl.Parameters.W[f][c],
+				Gradient: cl.Gradients.DW[f][c],
+				Update: func(m *mat.Dense) {
+					cl.Parameters.W[f][c] = m
+				},
+			})
+		}
+	}
+
+	params = append(params, &nncore.Parameter{
+		Value:    cl.Parameters.B,
+		Gradient: cl.Gradients.DB,
+		Update: func(m *mat.Dense) {
+			cl.Parameters.B = m
+		},
+	})
+
+	return params
 }

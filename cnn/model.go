@@ -131,9 +131,12 @@ func (c *cnn) AddDenseLayer(nnStructure []int) {
 
 func (c *cnn) NewTrainer(config TrainerConfig, options ...func(*cnnModel)) CNNModel {
 	// add convolutional layer
-	for _, v := range c.ConvConfigs {
-		convLayer := newConvLayer(v.NFilters, v.FilterSize, v.Stride, c.Activation, config.Optimizer,
-			v.InputShape, v.OutputShape)
+	for _, convConfig := range c.ConvConfigs {
+		convLayer := newConvLayer(convLayerConfig{
+			convConfig: convConfig,
+			Activation: c.Activation,
+			Optimizer:  config.Optimizer,
+		})
 		c.ConvLayers = append(c.ConvLayers, convLayer)
 	}
 
@@ -145,8 +148,8 @@ func (c *cnn) NewTrainer(config TrainerConfig, options ...func(*cnnModel)) CNNMo
 		NNStructure:      c.DenseLayerStructure,
 		Activation:       c.Activation,
 		OutputActivation: c.OutputActivation,
+		Optimizer:        config.Optimizer,
 	})
-	c.DenseLayer.Optimizer = nncore.NewOptimizer(config.Optimizer, c.DenseLayer.Parameters)
 
 	// each worker accumulates its own local gradients in the backward propagation
 	// for a subset of the training samples before the final gradient reduction

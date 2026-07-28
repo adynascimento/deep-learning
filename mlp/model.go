@@ -33,10 +33,12 @@ type TrainerConfig struct {
 }
 
 type neuralNetwork struct {
-	NNStructure  []int
-	Mode         nncore.ModeType
-	LossFunction nncore.LossFunction
-	Dense        *nncore.Dense
+	NNStructure      []int
+	Activation       nncore.Activation
+	Mode             nncore.ModeType
+	OutputActivation nncore.OutputActivation
+	LossFunction     nncore.LossFunction
+	Dense            *nncore.Dense
 }
 
 type neuralModel struct {
@@ -58,18 +60,12 @@ func NewNeuralNetwork(config NeuralConfig) NeuralNetwork {
 	// choice of output layer activation function and loss function
 	configMode := nncore.ModeSettings[config.Mode]
 
-	// initializing denseLayer layer
-	denseLayer := nncore.NewDense(nncore.DenseConfig{
+	return &neuralNetwork{
 		NNStructure:      config.NNStructure,
 		Activation:       activation,
+		Mode:             config.Mode,
 		OutputActivation: configMode.OutputActivation,
-	})
-
-	return &neuralNetwork{
-		NNStructure:  config.NNStructure,
-		Mode:         config.Mode,
-		LossFunction: configMode.LossFunction,
-		Dense:        denseLayer,
+		LossFunction:     configMode.LossFunction,
 	}
 }
 
@@ -80,8 +76,14 @@ func (nn *neuralNetwork) NewTrainer(config TrainerConfig, options ...func(*neura
 		Epochs:        config.Epochs,
 		BatchSize:     32,
 	}
-	// choice of optimization algorithm
-	model.Dense.Optimizer = nncore.NewOptimizer(config.Optimizer, nn.Dense.Parameters)
+
+	// initializing dense layer
+	model.Dense = nncore.NewDense(nncore.DenseConfig{
+		NNStructure:      nn.NNStructure,
+		Activation:       nn.Activation,
+		OutputActivation: nn.OutputActivation,
+		Optimizer:        config.Optimizer,
+	})
 
 	// apply additional options
 	for _, option := range options {

@@ -14,9 +14,9 @@ import (
 
 	"github.com/adynascimento/deep-learning/cnn"
 	"github.com/adynascimento/deep-learning/ngo"
+	"github.com/adynascimento/deep-learning/nncore"
 	"gonum.org/v1/gonum/mat"
 )
-import "github.com/adynascimento/deep-learning/nncore"
 
 func main() {
 	blas64.Use(netlib.Implementation{})
