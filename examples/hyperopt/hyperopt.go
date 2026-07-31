@@ -34,7 +34,7 @@ func main() {
 			mlp.WithL2Regularization(params.L2Regularization),
 		)
 		model.Fit(xTrain, yTrain, mlp.WithVerbose(false))
-		model.Save("./trials/networkmodel" + strconv.Itoa(trialID) + ".json")
+		model.Save("./trials/model" + strconv.Itoa(trialID) + ".json")
 
 		// make predictions and evaluate model
 		return model.Evaluate(xTrain, yTrain)

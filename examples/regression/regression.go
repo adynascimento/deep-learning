@@ -37,7 +37,7 @@ func main() {
 	model.Fit(xTrain, yTrain)
 
 	// saves neural network model to file
-	model.Save("networkmodel.json")
+	model.Save("model.json")
 
 	// make predictions
 	yPred := model.Predict(xTrain)
@@ -60,6 +60,5 @@ func main() {
 	plt.YLim(-1.0, 1.0)
 	plt.Grid()
 
-	// plt.Save("prediction.png")
 	plt.Show()
 }

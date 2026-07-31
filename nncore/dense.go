@@ -1,6 +1,8 @@
 package nncore
 
 import (
+	"bytes"
+	"encoding/gob"
 	"math"
 	"strconv"
 
@@ -161,4 +163,17 @@ func (dn *Dense) TrainableParameters(dW, db map[string]*mat.Dense) []*Parameter 
 	}
 
 	return params
+}
+
+func (dn *Dense) MarshalParameters() ([]byte, error) {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(dn.Parameters); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (dn *Dense) UnmarshalParameters(data []byte) error {
+	return gob.NewDecoder(bytes.NewReader(data)).Decode(&dn.Parameters)
 }

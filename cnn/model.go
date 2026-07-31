@@ -59,7 +59,6 @@ type cnnModel struct {
 	*cnnForwardOutputs
 	NWorkers         int
 	WorkerGradients  [][]gradients
-	Optimizer        nncore.OptimizerType
 	LearningRate     float64
 	L2Regularization float64
 	Epochs           int
@@ -173,7 +172,6 @@ func (c *cnn) NewTrainer(config TrainerConfig, options ...func(*cnnModel)) CNNMo
 		},
 		NWorkers:        nWorkers,
 		WorkerGradients: workerGradients,
-		Optimizer:       config.Optimizer,
 		LearningRate:    config.LearningRate,
 		Epochs:          config.Epochs,
 		BatchSize:       32,

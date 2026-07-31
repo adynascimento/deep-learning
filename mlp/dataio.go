@@ -4,97 +4,140 @@ import (
 	"encoding/json"
 	"log"
 	"os"
-	"strconv"
+	"regexp"
 
 	"github.com/adynascimento/deep-learning/nncore"
-	"gonum.org/v1/gonum/mat"
+)
+
+var (
+	arrayRegex        = regexp.MustCompile(`\[\s*([\d,\s]+?)\s*\]`)
+	spaceRegex        = regexp.MustCompile(`\s+`)
+	commaSpaceRegex   = regexp.MustCompile(`,\s*`)
+	openBracketRegex  = regexp.MustCompile(`\[\s+`)
+	closeBracketRegex = regexp.MustCompile(`\s+\]`)
 )
 
 type model struct {
-	NNStructure      []int                 `json:"nn_structure"`
-	ActivationName   nncore.ActivationType `json:"activation"`
-	Mode             nncore.ModeType       `json:"mode"`
-	OptimizerName    nncore.OptimizerType  `json:"optimizer"`
-	LearningRate     float64               `json:"learning_rate"`
-	L2Regularization float64               `json:"l2_regularization"`
-	Epochs           int                   `json:"epochs"`
-	Parameters       map[string][]float64  `json:"parameters"`
+	NNStructure  []int                 `json:"nn_structure"`
+	Activation   nncore.ActivationType `json:"activation"`
+	Mode         nncore.ModeType       `json:"mode"`
+	LearningRate float64               `json:"learning_rate"`
+	Epochs       int                   `json:"epochs"`
+	BatchSize    int                   `json:"batch_size"`
+	Dense        denseModel            `json:"dense"`
 }
 
-// save a representation of v to the file at path.
+type denseModel struct {
+	Parameters       []byte    `json:"parameters"`
+	L2Regularization float64   `json:"l2_regularization"`
+	Dropout          float64   `json:"dropout"`
+	Optimizer        optimizer `json:"optimizer"`
+}
+
+type optimizer struct {
+	Name  nncore.OptimizerType `json:"name"`
+	Iter  float64              `json:"iter"`
+	State []byte               `json:"state"`
+}
+
 func (nm *neuralModel) Save(path string) {
 	model := toModel(*nm)
 
 	b, err := json.MarshalIndent(model, "", "\t")
 	if err != nil {
-		log.Println("impossible to save neural network model on file:", err.Error())
+		log.Fatalln("error to save neural network model on file:", err.Error())
 	}
 
-	err = os.WriteFile(path, b, 0644)
-	if err != nil {
-		log.Println("impossible to save neural network model on file:", err.Error())
+	jsonStr := arrayRegex.ReplaceAllStringFunc(string(b), func(match string) string {
+		internal := commaSpaceRegex.ReplaceAllString(spaceRegex.ReplaceAllString(match, " "), ", ")
+		return openBracketRegex.ReplaceAllString(closeBracketRegex.ReplaceAllString(internal, "]"), "[")
+	})
+
+	if err := os.WriteFile(path, []byte(jsonStr), 0644); err != nil {
+		log.Fatalln("error to save neural network model on file:", err.Error())
 	}
 }
 
-func toModel(network neuralModel) model {
-	parameters := make(map[string][]float64)
-	for k, v := range network.Dense.Parameters {
-		parameters[k] = v.RawMatrix().Data
+func toModel(n neuralModel) model {
+	denseParameters, err := n.Dense.MarshalParameters()
+	if err != nil {
+		log.Fatalln("error to marshal dense parameters:", err.Error())
+	}
+
+	optimizerState, err := n.Dense.Optimizer.MarshalState()
+	if err != nil {
+		log.Fatalln("error to marshal optimizer state:", err.Error())
 	}
 
 	return model{
-		NNStructure:      network.NNStructure,
-		ActivationName:   network.Dense.Activation.Name,
-		Mode:             network.Dense.OutputActivation.Mode,
-		OptimizerName:    network.Dense.Optimizer.Name(),
-		LearningRate:     network.LearningRate,
-		L2Regularization: network.Dense.L2Regularization,
-		Epochs:           network.Epochs,
-		Parameters:       parameters,
+		NNStructure:  n.NNStructure,
+		Activation:   n.Dense.Activation.Name,
+		Mode:         n.Dense.OutputActivation.Mode,
+		LearningRate: n.LearningRate,
+		Epochs:       n.Epochs,
+		BatchSize:    n.BatchSize,
+		Dense: denseModel{
+			Parameters:       denseParameters,
+			L2Regularization: n.Dense.L2Regularization,
+			Dropout:          n.Dense.Dropout,
+			Optimizer: optimizer{
+				Name:  n.Dense.Optimizer.Name(),
+				Iter:  n.Dense.Iter,
+				State: optimizerState,
+			},
+		},
 	}
 }
 
 func Load(path string) NeuralModel {
 	b, err := os.ReadFile(path)
-	if nil != err {
-		log.Println("error loading neural network model from file: ", err.Error())
+	if err != nil {
+		log.Fatalln("error loading neural network model from file: ", err.Error())
 	}
 
 	model := model{}
-	err = json.Unmarshal(b, &model)
-	if nil != err {
-		log.Println("error loading neural network model from file: ", err.Error())
+	if err := json.Unmarshal(b, &model); err != nil {
+		log.Fatalln("error loading neural network model from file: ", err.Error())
 	}
 
 	return toNetwork(model)
 }
 
-func toNetwork(model model) NeuralModel {
-	parameters := make(map[string]*mat.Dense) // map containing the parameters
-	L := len(model.NNStructure) - 1           // number of layers
-
-	// load parameters
-	for l := 0; l < L; l++ {
-		parameters["W"+strconv.Itoa(l+1)] = mat.NewDense(model.NNStructure[l+1], model.NNStructure[l], model.Parameters["W"+strconv.Itoa(l+1)])
-		parameters["b"+strconv.Itoa(l+1)] = mat.NewDense(model.NNStructure[l+1], 1, model.Parameters["b"+strconv.Itoa(l+1)])
-	}
-
+func toNetwork(m model) NeuralModel {
 	// choice of activation function
-	activation := nncore.NewActivation(model.ActivationName)
+	activation := nncore.NewActivation(m.Activation)
 
 	// choice of output layer activation function and loss function
-	configMode := nncore.NewMode(model.Mode)
+	configMode := nncore.NewMode(m.Mode)
+
+	// choice of optimization algorithm
+	optimizer := nncore.NewOptimizer(m.Dense.Optimizer.Name)
+	if err := optimizer.UnmarshalState(m.Dense.Optimizer.State); err != nil {
+		log.Fatalln("error unmarshal optimizer state: ", err.Error())
+	}
+
+	// initializing denseLayer layer
+	denseLayer := &nncore.Dense{
+		Activation:       activation,
+		OutputActivation: configMode.OutputActivation,
+		Optimizer:        optimizer,
+		Iter:             m.Dense.Optimizer.Iter,
+		L2Regularization: m.Dense.L2Regularization,
+		Dropout:          m.Dense.Dropout,
+	}
+	if err := denseLayer.UnmarshalParameters(m.Dense.Parameters); err != nil {
+		log.Fatalln("error unmarshal dense parameters: ", err.Error())
+	}
 
 	return &neuralModel{
 		neuralNetwork: &neuralNetwork{
-			NNStructure:  model.NNStructure,
-			Mode:         model.Mode,
+			NNStructure:  m.NNStructure,
+			Mode:         m.Mode,
 			LossFunction: configMode.LossFunction,
-			Dense: &nncore.Dense{
-				Activation:       activation,
-				OutputActivation: configMode.OutputActivation,
-				Parameters:       parameters,
-			},
+			Dense:        denseLayer,
 		},
+		LearningRate: m.LearningRate,
+		Epochs:       m.Epochs,
+		BatchSize:    m.BatchSize,
 	}
 }

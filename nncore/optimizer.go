@@ -1,6 +1,8 @@
 package nncore
 
 import (
+	"bytes"
+	"encoding/gob"
 	"math"
 
 	"github.com/adynascimento/deep-learning/ngo"
@@ -17,6 +19,9 @@ const (
 type Optimizer interface {
 	Name() OptimizerType
 	Step(parameters []*Parameter, learningRate, t float64)
+
+	MarshalState() ([]byte, error)
+	UnmarshalState([]byte) error
 }
 
 type Parameter struct {
@@ -52,9 +57,21 @@ func (opt *gradientDescentOptimizer) Step(parameters []*Parameter, learningRate,
 	}
 }
 
+func (opt *gradientDescentOptimizer) MarshalState() ([]byte, error) {
+	return nil, nil
+}
+
+func (opt *gradientDescentOptimizer) UnmarshalState(data []byte) error {
+	return nil
+}
+
 type adamOptimizer struct {
-	v []*mat.Dense
-	s []*mat.Dense
+	adamState
+}
+
+type adamState struct {
+	V []*mat.Dense
+	S []*mat.Dense
 }
 
 func (opt *adamOptimizer) Name() OptimizerType {
@@ -64,14 +81,14 @@ func (opt *adamOptimizer) Name() OptimizerType {
 // update the parameters (adam optimizer)
 func (opt *adamOptimizer) Step(parameters []*Parameter, learningRate, t float64) {
 	// initializing adam states
-	if len(opt.v) == 0 {
-		opt.v = make([]*mat.Dense, len(parameters))
-		opt.s = make([]*mat.Dense, len(parameters))
+	if len(opt.V) == 0 {
+		opt.V = make([]*mat.Dense, len(parameters))
+		opt.S = make([]*mat.Dense, len(parameters))
 
 		for i, p := range parameters {
 			r, c := p.Value.Dims()
-			opt.v[i] = mat.NewDense(r, c, nil)
-			opt.s[i] = mat.NewDense(r, c, nil)
+			opt.V[i] = mat.NewDense(r, c, nil)
+			opt.S[i] = mat.NewDense(r, c, nil)
 		}
 	}
 
@@ -82,16 +99,16 @@ func (opt *adamOptimizer) Step(parameters []*Parameter, learningRate, t float64)
 
 	for i, p := range parameters {
 		// moving average of the gradients
-		opt.v[i] = ngo.Add(ngo.Scale(beta1, opt.v[i]), ngo.Scale((1-beta1), p.Gradient))
+		opt.V[i] = ngo.Add(ngo.Scale(beta1, opt.V[i]), ngo.Scale((1-beta1), p.Gradient))
 
 		// moving average of the squared gradients
-		opt.s[i] = ngo.Add(ngo.Scale(beta2, opt.s[i]), ngo.Scale((1.0-beta2), ngo.Square(p.Gradient)))
+		opt.S[i] = ngo.Add(ngo.Scale(beta2, opt.S[i]), ngo.Scale((1.0-beta2), ngo.Square(p.Gradient)))
 
 		// compute bias-corrected first moment estimate
-		vCorr := ngo.Scale(1.0/(1.0-math.Pow(beta1, t)), opt.v[i])
+		vCorr := ngo.Scale(1.0/(1.0-math.Pow(beta1, t)), opt.V[i])
 
 		// compute bias-corrected second raw moment estimate
-		sCorr := ngo.Scale(1.0/(1.0-math.Pow(beta2, t)), opt.s[i])
+		sCorr := ngo.Scale(1.0/(1.0-math.Pow(beta2, t)), opt.S[i])
 
 		// update parameter
 		sqrtV := ngo.Apply(func(_, _ int, x float64) float64 { return math.Sqrt(x) + epsilon }, sCorr)
@@ -100,4 +117,17 @@ func (opt *adamOptimizer) Step(parameters []*Parameter, learningRate, t float64)
 		// update source parameter
 		p.Update(p.Value)
 	}
+}
+
+func (opt *adamOptimizer) MarshalState() ([]byte, error) {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(opt.adamState); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (opt *adamOptimizer) UnmarshalState(data []byte) error {
+	return gob.NewDecoder(bytes.NewReader(data)).Decode(&opt.adamState)
 }

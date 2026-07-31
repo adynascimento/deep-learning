@@ -36,14 +36,15 @@ func main() {
 	model := neural.NewTrainer(mlp.TrainerConfig{
 		Optimizer:    nncore.AdamOptimizer, // optimizer
 		LearningRate: 1e-03,                // learning rate
-		Epochs:       50},                  // number of iterations
+		Epochs:       20},                  // number of iterations
 		mlp.WithBatchSize(32),
 		mlp.WithL2Regularization(1.0e-06),
-		mlp.WithDropout(0.4))
+		mlp.WithDropout(0.4),
+	)
 	model.Fit(xTrain, yTrain)
 
 	// saves neural network model to file
-	model.Save("networkmodel.json")
+	model.Save("model.json")
 
 	// accuracy of the model making predictions
 	fmt.Printf("accuracy of training data: %.4f \n", model.Evaluate(xTrain, yTrain))

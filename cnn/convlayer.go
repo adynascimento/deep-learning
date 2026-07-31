@@ -1,6 +1,8 @@
 package cnn
 
 import (
+	"bytes"
+	"encoding/gob"
 	"math"
 
 	"github.com/adynascimento/deep-learning/ngo"
@@ -27,7 +29,7 @@ type convLayer struct {
 type parameters struct {
 	W    [][]*mat.Dense // weights with shape (nFilters, nChannels, filterSize, filterSize)
 	B    *mat.Dense     // biases with shape (nFilters, 1)
-	wBig *mat.Dense     // flattened weights with shape (nFilters, nChannels*filterSize*filterSize)
+	WBig *mat.Dense     // flattened weights with shape (nFilters, nChannels*filterSize*filterSize)
 }
 
 type gradients struct {
@@ -86,7 +88,7 @@ func newConvLayer(config convLayerConfig) *convLayer {
 		Parameters: parameters{
 			W:    filters,
 			B:    mat.NewDense(config.NFilters, 1, nil),
-			wBig: wBig,
+			WBig: wBig,
 		},
 		Activation: config.Activation,
 		Gradients:  gradients,
@@ -122,6 +124,20 @@ func initializeConvParameters(nFilters, nChannels, filterSize int, activation nn
 	}
 
 	return filters
+}
+
+// initialize worker gradients
+func newWorkerGradients(convLayers []*convLayer, nWorkers int) [][]gradients {
+	workerGradients := make([][]gradients, nWorkers)
+	for w := 0; w < nWorkers; w++ {
+		workerGradients[w] = make([]gradients, len(convLayers))
+		for i := range convLayers {
+			layer := convLayers[i]
+			workerGradients[w][i] = newGradients(layer.NFilters, layer.NChannels, layer.FilterSize)
+		}
+	}
+
+	return workerGradients
 }
 
 func newGradients(nFilters, nChannels, filterSize int) gradients {
@@ -186,7 +202,7 @@ func (cl *convLayer) ForwardPropagation(x []*mat.Dense) ([]*mat.Dense, []*mat.De
 	//     xBig: nChannels*K x P
 	// zBig will have a shape: nFilters x P.
 	// each row contains the flattened output feature map of one filter.
-	zBig := ngo.MatMul(cl.Parameters.wBig, xBig)
+	zBig := ngo.MatMul(cl.Parameters.WBig, xBig)
 	for f := 0; f < nFilters; f++ {
 		z := mat.NewDense(hOut, wOut, nil)
 		copy(
@@ -321,7 +337,7 @@ func (cl *convLayer) BackwardInputGradients(dZBig *mat.Dense, stride int) []*mat
 	// dxBig will have shape: nChannels*K x P.
 	// each input channel, a block of K rows stores the column representation
 	// of the input gradients, before reconstruction with Col2Im.
-	dxBig := ngo.MatMul(cl.Parameters.wBig.T(), dZBig)
+	dxBig := ngo.MatMul(cl.Parameters.WBig.T(), dZBig)
 
 	// initialize gradient for input x
 	// input dxPrev with shape (nChannels, hIn, wIn)
@@ -377,7 +393,7 @@ func (cl *convLayer) UpdateParameters(learningRate float64) {
 
 	// flattened weights after update
 	for f := 0; f < cl.NFilters; f++ {
-		row := cl.Parameters.wBig.RawRowView(f)
+		row := cl.Parameters.WBig.RawRowView(f)
 		for c := 0; c < cl.NChannels; c++ {
 			copy(
 				row[c*K:(c+1)*K],
@@ -421,4 +437,17 @@ func (cl *convLayer) TrainableParameters() []*nncore.Parameter {
 	})
 
 	return params
+}
+
+func (cl *convLayer) MarshalParameters() ([]byte, error) {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(cl.Parameters); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (cl *convLayer) UnmarshalParameters(data []byte) error {
+	return gob.NewDecoder(bytes.NewReader(data)).Decode(&cl.Parameters)
 }
