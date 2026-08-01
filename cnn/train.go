@@ -101,7 +101,7 @@ func (cm *cnnModel) BackwardPropagation(Z, A map[string]*mat.Dense, D map[string
 						dOut = cm.PoolLayers[i].BackwardPropagation(dOut, cm.PoolOutputs["pool"+strconv.Itoa(i+1)][t])
 					}
 					dOut = cm.ConvLayers[i].BackwardPropagation(cm.ConvOutputs["convI"+strconv.Itoa(i+1)][t],
-						cm.ConvOutputs["convZ"+strconv.Itoa(i+1)][t], dOut, &workerGradient[i], cm.L2Regularization/float64(nTraining))
+						cm.ConvOutputs["convZ"+strconv.Itoa(i+1)][t], dOut, &workerGradient[i], cm.ConvLayers[i].L2Regularization/float64(nTraining))
 				}
 			}
 		}(grad)
@@ -171,7 +171,7 @@ func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...fun
 			yPred, Z, A, D := cm.ForwardPropagation(xBatch, true)
 
 			// loss function
-			loss := cm.LossFunction(yPred, yBatch, cm.DenseLayer.Parameters, cm.L2Regularization)
+			loss := cm.LossFunction(yPred, yBatch, cm.DenseLayer.Parameters, cm.DenseLayer.L2Regularization)
 			lossBatches = append(lossBatches, loss)
 			weights = append(weights, float64(len(xBatch)))
 

@@ -96,7 +96,7 @@ func toModel(cm cnnModel) model {
 			NFilters:         v.NFilters,
 			FilterSize:       v.FilterSize,
 			Stride:           v.Stride,
-			L2Regularization: cm.L2Regularization,
+			L2Regularization: v.L2Regularization,
 			Parameters:       convParameters,
 			Optimizer: optimizer{
 				Name:  v.Optimizer.Name(),
@@ -173,17 +173,18 @@ func toNetwork(m model) CNNModel {
 		nChannels := v.InputShape[0]
 		gradients := newGradients(v.NFilters, nChannels, v.FilterSize)
 		convLayer := &convLayer{
-			InputShape:      v.InputShape,
-			OutputShape:     v.OutputShape,
-			TrainableParams: v.TrainableParams,
-			Activation:      activation,
-			Gradients:       gradients,
-			Optimizer:       optimizer,
-			NFilters:        v.NFilters,
-			NChannels:       nChannels,
-			FilterSize:      v.FilterSize,
-			Stride:          v.Stride,
-			Iter:            v.Optimizer.Iter,
+			InputShape:       v.InputShape,
+			OutputShape:      v.OutputShape,
+			TrainableParams:  v.TrainableParams,
+			Activation:       activation,
+			Gradients:        gradients,
+			Optimizer:        optimizer,
+			NFilters:         v.NFilters,
+			NChannels:        nChannels,
+			FilterSize:       v.FilterSize,
+			Stride:           v.Stride,
+			Iter:             v.Optimizer.Iter,
+			L2Regularization: v.L2Regularization,
 		}
 		if err := convLayer.UnmarshalParameters(v.Parameters); err != nil {
 			log.Fatalln("error unmarshal conv parameters: ", err.Error())
@@ -227,11 +228,10 @@ func toNetwork(m model) CNNModel {
 			ConvOutputs: make(map[string][][]*mat.Dense),
 			PoolOutputs: make(map[string][]*poolCache),
 		},
-		NWorkers:         runtime.GOMAXPROCS(0),
-		WorkerGradients:  newWorkerGradients(convLayers, runtime.GOMAXPROCS(0)),
-		LearningRate:     m.LearningRate,
-		L2Regularization: m.DenseLayer.L2Regularization,
-		Epochs:           m.Epochs,
-		BatchSize:        m.BatchSize,
+		NWorkers:        runtime.GOMAXPROCS(0),
+		WorkerGradients: newWorkerGradients(convLayers, runtime.GOMAXPROCS(0)),
+		LearningRate:    m.LearningRate,
+		Epochs:          m.Epochs,
+		BatchSize:       m.BatchSize,
 	}
 }

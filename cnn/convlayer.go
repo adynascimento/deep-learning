@@ -12,18 +12,19 @@ import (
 )
 
 type convLayer struct {
-	InputShape      [3]int
-	OutputShape     [3]int
-	TrainableParams int
-	Parameters      parameters
-	Activation      nncore.Activation
-	Gradients       gradients
-	Optimizer       nncore.Optimizer
-	NFilters        int
-	NChannels       int
-	FilterSize      int
-	Stride          int
-	Iter            float64
+	InputShape       [3]int
+	OutputShape      [3]int
+	TrainableParams  int
+	Parameters       parameters
+	Activation       nncore.Activation
+	Gradients        gradients
+	Optimizer        nncore.Optimizer
+	NFilters         int
+	NChannels        int
+	FilterSize       int
+	Stride           int
+	Iter             float64
+	L2Regularization float64
 }
 
 type parameters struct {
@@ -124,20 +125,6 @@ func initializeConvParameters(nFilters, nChannels, filterSize int, activation nn
 	}
 
 	return filters
-}
-
-// initialize worker gradients
-func newWorkerGradients(convLayers []*convLayer, nWorkers int) [][]gradients {
-	workerGradients := make([][]gradients, nWorkers)
-	for w := 0; w < nWorkers; w++ {
-		workerGradients[w] = make([]gradients, len(convLayers))
-		for i := range convLayers {
-			layer := convLayers[i]
-			workerGradients[w][i] = newGradients(layer.NFilters, layer.NChannels, layer.FilterSize)
-		}
-	}
-
-	return workerGradients
 }
 
 func newGradients(nFilters, nChannels, filterSize int) gradients {

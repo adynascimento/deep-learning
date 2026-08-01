@@ -57,12 +57,11 @@ type cnn struct {
 type cnnModel struct {
 	*cnn
 	*cnnForwardOutputs
-	NWorkers         int
-	WorkerGradients  [][]gradients
-	LearningRate     float64
-	L2Regularization float64
-	Epochs           int
-	BatchSize        int
+	NWorkers        int
+	WorkerGradients [][]gradients
+	LearningRate    float64
+	Epochs          int
+	BatchSize       int
 }
 
 type cnnForwardOutputs struct {
@@ -93,10 +92,7 @@ func NewConvNeuralNetwork(config CNNConfig) CNN {
 
 // add convolutional layer
 func (c *cnn) AddConv2DLayer(nFilters, filterSize, stride int) {
-	inputShape := c.InputShape
-	if len(c.ConvConfigs) > 0 {
-		inputShape = c.PoolLayers[len(c.PoolLayers)-1].OutputShape
-	}
+	inputShape := c.LastOutputShape()
 	hOut := (inputShape[1]-filterSize)/stride + 1
 	wOut := (inputShape[2]-filterSize)/stride + 1
 
@@ -111,21 +107,35 @@ func (c *cnn) AddConv2DLayer(nFilters, filterSize, stride int) {
 
 // add pooling layer
 func (c *cnn) AddMaxPooling2DLayer(size, stride int) {
-	inputShape := c.ConvConfigs[len(c.ConvConfigs)-1].OutputShape
+	inputShape := c.LastOutputShape()
 	c.PoolLayers = append(c.PoolLayers, newPoolLayer(size, stride, inputShape))
 }
 
 // add fully connected layer
 func (c *cnn) AddDenseLayer(nnStructure []int) {
 	// input dimension features (previous layer output)
-	inputShape := c.ConvConfigs[len(c.ConvConfigs)-1].OutputShape
-	if len(c.ConvConfigs) == len(c.PoolLayers) {
-		inputShape = c.PoolLayers[len(c.PoolLayers)-1].OutputShape
-	}
+	inputShape := c.LastOutputShape()
 	inputDim := inputShape[0] * inputShape[1] * inputShape[2]
 
 	nnStructure = append([]int{inputDim}, nnStructure...)
 	c.DenseLayerStructure = nnStructure
+}
+
+// returns the output shape of the last layer in the network
+func (c *cnn) LastOutputShape() [3]int {
+	// no convolutional layers have been added yet,
+	// so the network output is still the input shape
+	if len(c.ConvConfigs) == 0 {
+		return c.InputShape
+	}
+	// the last added layer is a pooling layer
+	// (one pooling layer for each convolutional layer)
+	if len(c.PoolLayers) == len(c.ConvConfigs) {
+		return c.PoolLayers[len(c.PoolLayers)-1].OutputShape
+	}
+	// the last added layer is a convolutional layer
+	// (a pooling layer has not been added after it yet)
+	return c.ConvConfigs[len(c.ConvConfigs)-1].OutputShape
 }
 
 func (c *cnn) NewTrainer(config TrainerConfig, options ...func(*cnnModel)) CNNModel {
@@ -153,16 +163,7 @@ func (c *cnn) NewTrainer(config TrainerConfig, options ...func(*cnnModel)) CNNMo
 	// each worker accumulates its own local gradients in the backward propagation
 	// for a subset of the training samples before the final gradient reduction
 	nWorkers := runtime.GOMAXPROCS(0)
-	workerGradients := make([][]gradients, nWorkers)
-	for w := 0; w < nWorkers; w++ {
-		workerGradients[w] = make([]gradients, len(c.ConvLayers))
-		for i := range c.ConvLayers {
-			layer := c.ConvLayers[i]
-
-			// initialize worker gradients
-			workerGradients[w][i] = newGradients(layer.NFilters, layer.NChannels, layer.FilterSize)
-		}
-	}
+	workerGradients := newWorkerGradients(c.ConvLayers, nWorkers)
 
 	model := cnnModel{
 		cnn: c,
@@ -185,6 +186,20 @@ func (c *cnn) NewTrainer(config TrainerConfig, options ...func(*cnnModel)) CNNMo
 	return &model
 }
 
+// initialize worker gradients
+func newWorkerGradients(convLayers []*convLayer, nWorkers int) [][]gradients {
+	workerGradients := make([][]gradients, nWorkers)
+	for w := 0; w < nWorkers; w++ {
+		workerGradients[w] = make([]gradients, len(convLayers))
+		for i := range convLayers {
+			layer := convLayers[i]
+			workerGradients[w][i] = newGradients(layer.NFilters, layer.NChannels, layer.FilterSize)
+		}
+	}
+
+	return workerGradients
+}
+
 func WithBatchSize(batchSize int) func(*cnnModel) {
 	return func(nm *cnnModel) {
 		nm.BatchSize = batchSize
@@ -193,7 +208,9 @@ func WithBatchSize(batchSize int) func(*cnnModel) {
 
 func WithL2Regularization(lambd float64) func(*cnnModel) {
 	return func(nm *cnnModel) {
-		nm.L2Regularization = lambd
+		for _, layer := range nm.ConvLayers {
+			layer.L2Regularization = lambd
+		}
 		nm.DenseLayer.L2Regularization = lambd
 	}
 }
