@@ -5,6 +5,7 @@ import (
 
 	"github.com/adynascimento/deep-learning/cnn"
 	"github.com/adynascimento/deep-learning/ngo"
+	"github.com/adynascimento/deep-learning/nncore"
 	"gonum.org/v1/gonum/mat"
 )
 
@@ -54,8 +55,8 @@ func main() {
 	// neural network model
 	neural := cnn.NewConvNeuralNetwork(cnn.CNNConfig{
 		InputShape: [3]int{3, 100, 100},
-		Activation: cnn.ReLUActivation,
-		Mode:       cnn.ModeMultiLabel,
+		Activation: nncore.ReLUActivation,
+		Mode:       nncore.ModeMultiLabel,
 	})
 	neural.AddConv2DLayer(8, 3, 1)
 	neural.AddMaxPooling2DLayer(2, 2)
@@ -63,7 +64,7 @@ func main() {
 
 	// optimizer to train the model
 	model := neural.NewTrainer(cnn.TrainerConfig{
-		Optimizer:    cnn.AdamOptimizer,
+		Optimizer:    nncore.AdamOptimizer,
 		LearningRate: 0.001,
 		Epochs:       30},
 		cnn.WithBatchSize(32),

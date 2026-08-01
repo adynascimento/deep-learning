@@ -1,18 +1,17 @@
-package neuralnetwork
+package nncore
 
 import (
 	"math"
 	"strconv"
 
 	"github.com/adynascimento/deep-learning/ngo"
-
 	"gonum.org/v1/gonum/mat"
 )
 
-type lossFunction func(*mat.Dense, *mat.Dense, map[string]*mat.Dense, float64) float64
+type LossFunction func(*mat.Dense, *mat.Dense, map[string]*mat.Dense, float64) float64
 
 // computing the mean squared error loss function
-func meanSquaredError(yHat, y *mat.Dense, parameters map[string]*mat.Dense, lambd float64) float64 {
+func MeanSquaredError(yHat, y *mat.Dense, parameters map[string]*mat.Dense, lambd float64) float64 {
 	m := yHat.RawMatrix().Cols
 	loss := mat.Sum(ngo.Square(ngo.Sub(yHat, y)))
 
@@ -28,7 +27,7 @@ func meanSquaredError(yHat, y *mat.Dense, parameters map[string]*mat.Dense, lamb
 }
 
 // computing the cross entropy loss function
-func crossEntropy(y_hat, y *mat.Dense, parameters map[string]*mat.Dense, lambd float64) float64 {
+func CrossEntropy(y_hat, y *mat.Dense, parameters map[string]*mat.Dense, lambd float64) float64 {
 	m := y_hat.RawMatrix().Cols
 
 	epsilon := 1e-07
@@ -47,7 +46,7 @@ func crossEntropy(y_hat, y *mat.Dense, parameters map[string]*mat.Dense, lambd f
 }
 
 // computing the binary cross entropy loss function
-func binaryCrossEntropy(y_hat, y *mat.Dense, parameters map[string]*mat.Dense, lambd float64) float64 {
+func BinaryCrossEntropy(y_hat, y *mat.Dense, parameters map[string]*mat.Dense, lambd float64) float64 {
 	m := y_hat.RawMatrix().Cols
 
 	epsilon := 1e-07

@@ -10,7 +10,7 @@ import (
 	"os"
 	"strconv"
 
-	network "github.com/adynascimento/deep-learning/neuralnetwork"
+	"github.com/adynascimento/deep-learning/mlp"
 
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"
@@ -39,7 +39,7 @@ func LoadDataFromFile(path string) *mat.Dense {
 	return m
 }
 
-func PredictFromImage(model network.NeuralModel, path string) (int, float64) {
+func PredictFromImage(model mlp.NeuralModel, path string) (int, float64) {
 	x := LoadFromImage(path)
 
 	// make predictions

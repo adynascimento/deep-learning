@@ -1,10 +1,10 @@
 # Deep Feedforward Neural Network (DNN) Code from Scratch Using Golang
 
-A comprehensive deep learning library written in Go from scratch, featuring support for Artificial Neural Networks (ANN), Convolutional Neural Networks (CNN), Hyperparameter Optimization, Mathematical Utilities and Natural Language Processing (NLP).
+A comprehensive deep learning library written in Go from scratch, featuring support for Multi-Layer Perceptron (MLP) Networks, Convolutional Neural Networks (CNN), Hyperparameter Optimization, Mathematical Utilities and Natural Language Processing (NLP).
 
 ## 📋 Features
 
-### 🧠 Artificial Neural Networks (ANN)
+### 🧠 Multi-Layer Perceptron (MLP) Networks
 - Fully connected customizable architecture
 - Multiple activation functions: Tanh, ReLU, Sigmoid, ELU
 - Three training modes:
@@ -13,15 +13,15 @@ A comprehensive deep learning library written in Go from scratch, featuring supp
   - **Multilabel Classification**: Multiple labels per sample
 - Optimizers: Adam, Gradient Descent
 - L2 Regularization
+- Dropout Regularization
 - Batch training with customizable batch size
 
 ### 🖼️ Convolutional Neural Networks (CNN)
 - 2D convolutional layers with customizable filters
 - Optimized convolution using Im2Col + GEMM
-- FFT-based convolution available for large kernels
 - Max Pooling layers
 - Flatten layer for transition to dense layers
-- Support for multiclass and multilabel classification modes
+- Support for regression, multiclass classification, and multilabel classification
 - Multi-channel image support (grayscale, RGB, custom channels)
 - Network architecture visualization
 - Model export and loading
@@ -30,7 +30,7 @@ A comprehensive deep learning library written in Go from scratch, featuring supp
 - **Random Search**: Random search over parameter space
 - **Bayesian Optimization**: Advanced Bayesian optimization powered by Goptuna
 - **Sampling Functions**: Intelligent hyperparameter exploration with log-uniform and uniform distributions
-- Testing different network architectures
+- Automatic neural architecture exploration
 - Model performance comparison
 - JSON results export
 
@@ -38,6 +38,7 @@ A comprehensive deep learning library written in Go from scratch, featuring supp
 - Matrix operations with Gonum
 - **StandardScaler**: Feature standardization with Fit/Transform/FitTransform/InverseTransform
 - **PCA (Principal Component Analysis)**: Dimensionality reduction with explained variance tracking
+- **Convolution**: Im2Col, Col2Im, and FFT-based convolution for large kernels
 - **Sampling Functions**: `SuggestInt`, `SuggestFloat`, `SuggestLogFloat` for hyperparameter exploration
 - Dense matrix manipulation
 - Linear functions (linspace, interpolation)
@@ -52,11 +53,11 @@ A comprehensive deep learning library written in Go from scratch, featuring supp
 ### 📈 I/O Utilities
 - CSV data loading
 - Model saving and loading in JSON format
-- Large-scale dataset support
 - Model summary generation
 
 ## ✨ Highlights
 
+- ✔ Implemented from scratch
 - ✔ Written entirely in Go
 - ✔ BLAS-accelerated matrix operations (Gonum)
 - ✔ Optimized convolution using Im2Col + GEMM
@@ -69,153 +70,75 @@ A comprehensive deep learning library written in Go from scratch, featuring supp
 
 ## 🎯 Usage Examples
 
-### 1. Regression (Sine Function Prediction)
+### 1. MLP for Regression
 
 ```go
-// examples/regression/regression.go
 package main
 
 import (
-	"math"
-	network "github.com/adynascimento/deep-learning/neuralnetwork"
-	"github.com/adynascimento/deep-learning/ngo"
-	"gonum.org/v1/gonum/mat"
+	"github.com/adynascimento/deep-learning/mlp"
+	"github.com/adynascimento/deep-learning/nncore"
 )
 
 func main() {
-	// training data: sine function
-	applySin := func(_, _ int, v float64) float64 { 
-		return math.Sin(15. * v) 
-	}
-	xTrain := mat.NewDense(1, 301, ngo.Linspace(0., 1., 301))
-	yTrain := ngo.Apply(applySin, xTrain)
-
 	// create model
-	neural := network.NewNeuralNetwork(network.NeuralConfig{
+	neural := mlp.NewNeuralNetwork(network.NeuralConfig{
 		NNStructure: []int{1, 40, 20, 10, 1},
-		Activation:  network.TanhActivation,
-		Mode:        network.ModeRegression,
+		Activation:  nncore.TanhActivation,
+		Mode:        nncore.ModeRegression,
 	})
 
 	// train
 	model := neural.NewTrainer(network.TrainerConfig{
-		Optimizer:    network.AdamOptimizer,
+		Optimizer:    nncore.AdamOptimizer,
 		LearningRate: 0.001,
-		Epochs:       10000},
-		network.WithL2Regularization(1.40e-06))
+		Epochs:       100},
+		mlp.WithBatchSize(32),
+		mlp.WithL2Regularization(1.40e-06))
 	
+	model.Summary()
 	model.Fit(xTrain, yTrain)
-	model.Save("networkmodel.json")
+	model.Save("model.json")
 
 	// make predictions
 	yPred := model.Predict(xTrain)
 }
 ```
 
+**Model Summary**:
+```
+|---------------|--------------|---------|
+| LAYER (TYPE)  | OUTPUT SHAPE | PARAM # |
+|---------------|--------------|---------|
+| Dense Layer 1 | (None, 40)   |      80 |
+| Dense Layer 2 | (None, 20)   |     820 |
+| Dense Layer 3 | (None, 10)   |     210 |
+| Dense Layer 4 | (None, 1)    |      11 |
+|---------------|--------------|---------|
+```
+
 **Use case**: Suitable for regression problems such as price prediction, temperature forecasting, time series analysis, etc.
 
 ---
 
-### 2. Multiclass Classification (MNIST with Neural Networks)
+### 2. CNN for Image Classification
 
 ```go
-// examples/multiclass/mnist.go
 package main
 
 import (
 	"fmt"
-	network "github.com/adynascimento/deep-learning/neuralnetwork"
-	"github.com/adynascimento/deep-learning/ngo"
-)
-
-func main() {
-	// load MNIST data
-	xTrain := LoadDataFromFile("../dataset/mnist/train_x_shuffled.csv")
-	yTrain := LoadDataFromFile("../dataset/mnist/train_label_shuffled.csv")
-	xTest := LoadDataFromFile("../dataset/mnist/test_x.csv")
-	yTest := LoadDataFromFile("../dataset/mnist/test_label.csv")
-
-	// normalize
-	applyNormalization := func(_, _ int, v float64) float64 { 
-		return v / 255.0 
-	}
-	xTrain = ngo.Apply(applyNormalization, xTrain)
-	xTest = ngo.Apply(applyNormalization, xTest)
-
-	// create model
-	neural := network.NewNeuralNetwork(network.NeuralConfig{
-		NNStructure: []int{784, 100, 100, 10},
-		Activation:  network.TanhActivation,
-		Mode:        network.ModeMultiClass,
-	})
-
-	// train
-	model := neural.NewTrainer(network.TrainerConfig{
-		Optimizer:    network.AdamOptimizer,
-		LearningRate: 0.0075,
-		Epochs:       100},
-		network.WithBatchSize(32),
-		network.WithL2Regularization(1.40e-06))
 	
-	model.Summary()
-	model.Fit(xTrain, yTrain)
-	model.Save("networkmodel.json")
-
-	// evaluate
-	fmt.Printf("training accuracy: %.4f\n", model.Evaluate(xTrain, yTrain))
-	fmt.Printf("testing accuracy:  %.4f\n", model.Evaluate(xTest, yTest))
-}
-```
-
-**Use case**: Handwritten digit classification, image categorization, etc.
-
----
-
-### 3. CNN for Image Classification (MNIST)
-
-```go
-// examples/cnn/mnist/mnist.go
-package main
-
-import (
-	"fmt"
 	"github.com/adynascimento/deep-learning/cnn"
-	"github.com/adynascimento/deep-learning/ngo"
-	"gonum.org/v1/gonum/mat"
+	"github.com/adynascimento/deep-learning/nncore"
 )
 
 func main() {
-	// load and normalize data
-	x := LoadDataFromFile("../../dataset/mnist/train_x_shuffled.csv")
-	v := LoadDataFromFile("../../dataset/mnist/test_x.csv")
-	
-	applyNormalization := func(_, _ int, v float64) float64 { 
-		return v / 255.0 
-	}
-	x = ngo.Apply(applyNormalization, x)
-	v = ngo.Apply(applyNormalization, v)
-
-	// convert to image format (28x28)
-	xTrain := make([][]*mat.Dense, x.RawMatrix().Cols)
-	for i := range xTrain {
-		xTrain[i] = make([]*mat.Dense, 1)
-		xTrain[i][0] = mat.NewDense(28, 28, mat.Col(nil, i, x))
-	}
-	
-	xTest := make([][]*mat.Dense, v.RawMatrix().Cols)
-	for i := range xTest {
-		xTest[i] = make([]*mat.Dense, 1)
-		xTest[i][0] = mat.NewDense(28, 28, mat.Col(nil, i, v))
-	}
-
-	yTrain := LoadDataFromFile("../../dataset/mnist/train_label_shuffled.csv")
-	yTest := LoadDataFromFile("../../dataset/mnist/test_label.csv")
-
 	// create CNN
 	neural := cnn.NewConvNeuralNetwork(cnn.CNNConfig{
 		InputShape: [3]int{1, 28, 28}, // 1 channel, 28x28
-		Activation: cnn.ReLUActivation,
-		Mode:       cnn.ModeMultiClass,
+		Activation: nncore.ReLUActivation,
+		Mode:       nncore.ModeMultiClass,
 	})
 
 	// build architecture
@@ -227,7 +150,7 @@ func main() {
 
 	// train
 	model := neural.NewTrainer(cnn.TrainerConfig{
-		Optimizer:    cnn.AdamOptimizer,
+		Optimizer:    nncore.AdamOptimizer,
 		LearningRate: 0.001,
 		Epochs:       20},
 		cnn.WithBatchSize(32),
@@ -243,14 +166,28 @@ func main() {
 }
 ```
 
+**Model Summary**:
+```
+|----------------------|--------------------|---------|
+|     LAYER (TYPE)     |    OUTPUT SHAPE    | PARAM # |
+|----------------------|--------------------|---------|
+| Conv2D Layer 1       | (None, 16, 26, 26) |     160 |
+| MaxPooling2D Layer 1 | (None, 16, 13, 13) |       0 |
+| Conv2D Layer 2       | (None, 32, 11, 11) |    4640 |
+| MaxPooling2D Layer 2 | (None, 32, 5, 5)   |       0 |
+| Flatten Layer        | (None, 800)        |       0 |
+| Dense Layer 1        | (None, 128)        |  102528 |
+| Dense Layer 2        | (None, 10)         |    1290 |
+|----------------------|--------------------|---------|
+```
+
 **Use case**: Complex image classification, object detection, facial recognition, etc.
 
 ---
 
-### 4. Hyperparameter Optimization
+### 3. Hyperparameter Optimization
 
 ```go
-// examples/hyperopt/hyperopt.go
 package main
 
 import (
@@ -258,8 +195,8 @@ import (
 	"strconv"
 
 	"github.com/adynascimento/deep-learning/hyperopt"
-	network "github.com/adynascimento/deep-learning/neuralnetwork"
-	"github.com/adynascimento/deep-learning/ngo"
+	"github.com/adynascimento/deep-learning/mlp"
+	"github.com/adynascimento/deep-learning/nncore"
 )
 
 func main() {
@@ -280,22 +217,22 @@ func main() {
 	// define objective function
 	objective := func(trialID int, params hyperopt.Params) float64 {
 		// neural network model
-		neural := network.NewNeuralNetwork(network.NeuralConfig{
-			NNStructure: params.NNStructure,     // neural network structure
-			Activation:  network.TanhActivation, // activation function
-			Mode:        network.ModeMultiClass, // mode determines output layer activation and loss function
+		neural := mlp.NewNeuralNetwork(network.NeuralConfig{
+			NNStructure: params.NNStructure,    // neural network structure
+			Activation:  nncore.TanhActivation, // activation function
+			Mode:        nncore.ModeMultiClass, // mode determines output layer activation and loss function
 		})
 
 		// optimizer to train the model
 		model := neural.NewTrainer(network.TrainerConfig{
-			Optimizer:    network.AdamOptimizer, // optimizer
+			Optimizer:    nncore.AdamOptimizer,  // optimizer
 			LearningRate: params.LearningRate,   // learning rate
 			Epochs:       400},                  // number of iterations
-			network.WithBatchSize(32),
-			network.WithL2Regularization(params.L2Regularization),
+			mlp.WithBatchSize(32),
+			mlp.WithL2Regularization(params.L2Regularization),
 		)
-		model.Fit(xTrain, yTrain, network.WithVerbose(false))
-		model.Save("./trials/networkmodel" + strconv.Itoa(trialID) + ".json")
+		model.Fit(xTrain, yTrain, mlp.WithVerbose(false))
+		model.Save("./trials/model" + strconv.Itoa(trialID) + ".json")
 
 		// make predictions and evaluate model
 		return model.Evaluate(xTrain, yTrain)
@@ -317,7 +254,7 @@ func main() {
 
 ---
 
-### 5. Data Scaling and Dimensionality Reduction
+### 4. Data Scaling and Dimensionality Reduction
 
 ```go
 // feature standardization with StandardScaler
@@ -384,7 +321,7 @@ func main() {
 
 ---
 
-### 6. Natural Language Processing
+### 5. Natural Language Processing
 
 ```go
 // example using NLP
@@ -417,46 +354,6 @@ func main() {
 
 ---
 
-## 📁 Project Structure
-
-```
-deep-learning/
-├── neuralnetwork/       # Artificial Neural Networks
-│   ├── neural.go        # Core architecture
-│   ├── activation.go    # Activation functions
-│   ├── loss.go          # Loss functions
-│   ├── optimizer.go     # Optimization algorithms
-│   └── dataio.go        # Data I/O
-├── cnn/                 # Convolutional Neural Networks
-│   ├── cnn.go           # CNN architecture
-│   ├── convlayer.go     # Convolutional layers
-│   ├── convolve2D.go    # 2D convolution operation
-│   ├── poolinglayer.go  # Max Pooling
-│   ├── flatten.go       # Flatten layer
-│   └── activation.go    # CNN activations
-├── hyperopt/            # Hyperparameter Optimization
-│   ├── optimization.go  # Interface
-│   ├── bayesian.go      # Bayesian Optimization
-│   └── randomsearch.go  # Random Search
-├── ngo/                 # Mathematical Utilities
-│   ├── matrix.go        # Matrix operations
-│   ├── floats.go        # Float operations
-│   ├── scaler.go        # Data scaling
-│   └── pca.go           # PCA
-├── nlp/                 # Natural Language Processing
-│   ├── bow.go           # Bag of Words
-│   ├── tfidf.go         # TF-IDF
-├── examples/            # Usage examples
-│   ├── regression/      # Regression example
-│   ├── multiclass/      # Multiclass classification
-│   ├── multilabel/      # Multilabel classification
-│   ├── cnn/mnist/       # CNN with MNIST
-│   └── dataset/         # Training data
-└── go.mod               # Go module
-```
-
----
-
 ## 🚀 Installation
 
 ### Prerequisites
@@ -475,9 +372,10 @@ Then import it:
 
 ```go
 import (
+	"github.com/adynascimento/deep-learning/nncore"
+	"github.com/adynascimento/deep-learning/mlp"
 	"github.com/adynascimento/deep-learning/cnn"
 	"github.com/adynascimento/deep-learning/hyperopt"
-	"github.com/adynascimento/deep-learning/neuralnetwork"
 	"github.com/adynascimento/deep-learning/ngo"
 	"github.com/adynascimento/deep-learning/nlp"
 )
@@ -494,11 +392,11 @@ go run regression.go
 
 ## 📦 Main Dependencies
 
-- **Gonum**: Numerical computing in Go
-- **Goptuna**: Bayesian hyperparameter optimization
-- **Plot** ([github.com/adynascimento/plot](https://github.com/adynascimento/plot)): Graph visualization and plotting
-- **ProgressBar**: Training progress bar
-- **TableWriter**: Table formatting for output
+- **Gonum**: Numerical computing in Go  ([github.com/gonum/gonum](https://github.com/gonum/gonum))
+- **Goptuna**: Bayesian hyperparameter optimization ([github.com/c-bata/goptuna](https://github.com/c-bata/goptuna))
+- **Plot**: Graph visualization and plotting ([github.com/adynascimento/plot](https://github.com/adynascimento/plot))
+- **ProgressBar**: Training progress bar ([github.com/schollz/progressbar](https://github.com/schollz/progressbar))
+- **TableWriter**: Table formatting for output ([github.com/olekukonko/tablewriter](https://github.com/olekukonko/tablewriter))
 
 ---
 
@@ -540,6 +438,7 @@ lr := ngo.SuggestLogFloat(1e-5, 1e-1) // logarithmically distributed
 
 ### Regularization
 - **L2 (Ridge)**: Penalizes large weights to prevent overfitting
+- **Dropout**: Randomly disables neurons during training to reduce overfitting
 
 ### Training Modes
 - **Regression**: MSE loss, linear output
@@ -553,37 +452,36 @@ lr := ngo.SuggestLogFloat(1e-5, 1e-1) // logarithmically distributed
 ### Batch Training
 ```go
 model := neural.NewTrainer(config,
-	network.WithBatchSize(32))
+	mlp.WithBatchSize(32))
 ```
 
-### L2 Regularization
+### Regularization Techniques
 ```go
 model := neural.NewTrainer(config,
-	network.WithL2Regularization(1e-6))
+	mlp.WithL2Regularization(1e-6),
+	mlp.WithDropout(0.4))
 ```
 
 ### Saving and Loading Models
 ```go
-// save an ANN model
-model.Save("ann_model.json")
+// save model
+model.Save("model.json")
 
-// load an ANN model
-loadedANN := network.Load("ann_model.json")
-
-// load a CNN model
-loadedCNN := cnn.Load("cnn_model.json")
+// load  model
+model := mlp.Load("model.json")
+model.Fit(...) // continue training
 ```
 
 ---
 
 ## 💡 Recommended Use Cases
 
-| Task | Component | Example |
+| Task | Model | Example |
 |------|-----------|----------|
-| Continuous value prediction | ANN + Regression | Real estate pricing |
+| Continuous value prediction | MLP + Regression | Real estate pricing |
 | Image classification | CNN | MNIST, CIFAR-10 |
-| Text classification | ANN + NLP | Sentiment analysis |
-| Multiple labels | ANN + Multilabel | Product tagging |
+| Text classification | MLP + NLP | Sentiment analysis |
+| Multiple labels | MLP + Multilabel | Product tagging |
 | Find optimal parameters | Hyperopt | Architecture tuning |
 
 

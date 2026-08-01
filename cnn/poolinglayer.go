@@ -7,10 +7,10 @@ import (
 )
 
 type poolLayer struct {
-	InputShape  [3]int
-	OutputShape [3]int
-	Size        int
-	Stride      int
+	InputShape  [3]int `json:"input_shape"`
+	OutputShape [3]int `json:"output_shape"`
+	Size        int    `json:"size"`
+	Stride      int    `json:"stride"`
 }
 
 // cache of max indices for backward propagation, shape (nFilters, hOut*wOut)

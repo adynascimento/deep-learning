@@ -3,8 +3,9 @@ package main
 import (
 	"fmt"
 
-	network "github.com/adynascimento/deep-learning/neuralnetwork"
+	"github.com/adynascimento/deep-learning/mlp"
 	"github.com/adynascimento/deep-learning/ngo"
+	"github.com/adynascimento/deep-learning/nncore"
 )
 
 func main() {
@@ -25,24 +26,24 @@ func main() {
 	outputDim := yTrain.RawMatrix().Rows
 
 	// neural network model
-	neural := network.NewNeuralNetwork(network.NeuralConfig{
+	neural := mlp.NewNeuralNetwork(mlp.NeuralConfig{
 		NNStructure: []int{inputDim, 100, 100, outputDim}, // neural network structure
-		Activation:  network.TanhActivation,               // activation function
-		Mode:        network.ModeMultiClass,               // mode determines output layer activation and loss function
+		Activation:  nncore.TanhActivation,                // activation function
+		Mode:        nncore.ModeMultiClass,                // mode determines output layer activation and loss function
 	})
 
 	// optimizer to train the model
-	model := neural.NewTrainer(network.TrainerConfig{
-		Optimizer:    network.AdamOptimizer, // optimizer
-		LearningRate: 0.0075,                // learning rate
-		Epochs:       100},                  // number of iterations
-		network.WithBatchSize(32),
-		network.WithL2Regularization(1.40e-06))
+	model := neural.NewTrainer(mlp.TrainerConfig{
+		Optimizer:    nncore.AdamOptimizer, // optimizer
+		LearningRate: 0.0075,               // learning rate
+		Epochs:       20},                  // number of iterations
+		mlp.WithBatchSize(32),
+		mlp.WithL2Regularization(1.40e-06))
 	model.Summary()
 	model.Fit(xTrain, yTrain)
 
 	// saves neural network model to file
-	model.Save("networkmodel.json")
+	model.Save("model.json")
 
 	// accuracy of the model making predictions
 	fmt.Printf("accuracy of training data: %.4f \n", model.Evaluate(xTrain, yTrain))

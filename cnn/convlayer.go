@@ -1,32 +1,36 @@
 package cnn
 
 import (
+	"bytes"
+	"encoding/gob"
 	"math"
 
 	"github.com/adynascimento/deep-learning/ngo"
+	"github.com/adynascimento/deep-learning/nncore"
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"
 )
 
 type convLayer struct {
-	InputShape      [3]int
-	OutputShape     [3]int
-	TrainableParams int
-	Parameters      parameters
-	Activation      activation
-	Gradients       gradients
-	Optimizer       convOptimizer
-	NFilters        int
-	NChannels       int
-	FilterSize      int
-	Stride          int
-	Iter            float64
+	InputShape       [3]int
+	OutputShape      [3]int
+	TrainableParams  int
+	Parameters       parameters
+	Activation       nncore.Activation
+	Gradients        gradients
+	Optimizer        nncore.Optimizer
+	NFilters         int
+	NChannels        int
+	FilterSize       int
+	Stride           int
+	Iter             float64
+	L2Regularization float64
 }
 
 type parameters struct {
 	W    [][]*mat.Dense // weights with shape (nFilters, nChannels, filterSize, filterSize)
 	B    *mat.Dense     // biases with shape (nFilters, 1)
-	wBig *mat.Dense     // flattened weights with shape (nFilters, nChannels*filterSize*filterSize)
+	WBig *mat.Dense     // flattened weights with shape (nFilters, nChannels*filterSize*filterSize)
 }
 
 type gradients struct {
@@ -42,22 +46,27 @@ type convConfig struct {
 	Stride      int
 }
 
-func newConvLayer(nFilters, filterSize, stride int, activation activation, optType optimizerType,
-	inputShape, outputShape [3]int) *convLayer {
-	nChannels := inputShape[0]
+type convLayerConfig struct {
+	convConfig
+	Activation nncore.Activation
+	Optimizer  nncore.OptimizerType
+}
+
+func newConvLayer(config convLayerConfig) *convLayer {
+	nChannels := config.InputShape[0]
 
 	// initialize convolutional neural network
 	// filters with shape (nFilters, nChannels, filterSize, filterSize)
-	filters := initializeConvParameters(nFilters, nChannels, filterSize, activation)
+	filters := initializeConvParameters(config.NFilters, nChannels, config.FilterSize, config.Activation)
 
 	// K is the number of weights per input channel
-	K := filterSize * filterSize
+	K := config.FilterSize * config.FilterSize
 
 	// wBig will have a shape: nFilters x nChannels*K.
 	// each row contains one filter flattened across all input channels.
 	// each block of K values corresponds to one input channel.
-	wBig := mat.NewDense(nFilters, nChannels*K, nil)
-	for f := 0; f < nFilters; f++ {
+	wBig := mat.NewDense(config.NFilters, nChannels*K, nil)
+	for f := 0; f < config.NFilters; f++ {
 		row := wBig.RawRowView(f)
 		for c := 0; c < nChannels; c++ {
 			copy(
@@ -68,41 +77,38 @@ func newConvLayer(nFilters, filterSize, stride int, activation activation, optTy
 	}
 
 	// initialize gradients
-	gradients := newGradients(nFilters, nChannels, filterSize)
+	gradients := newGradients(config.NFilters, nChannels, config.FilterSize)
 
 	// choice of optimization algorithm
-	optimizer := convOptimizerSettings[optType]
-	if optType == AdamOptimizer {
-		optimizer.Adam = convInitializeAdam(filters)
-	}
+	optimizer := nncore.NewOptimizer(config.Optimizer)
 
 	return &convLayer{
-		InputShape:      inputShape,
-		OutputShape:     outputShape,
-		TrainableParams: nFilters * (filterSize*filterSize*nChannels + 1),
+		InputShape:      config.InputShape,
+		OutputShape:     config.OutputShape,
+		TrainableParams: config.NFilters * (config.FilterSize*config.FilterSize*nChannels + 1),
 		Parameters: parameters{
 			W:    filters,
-			B:    mat.NewDense(nFilters, 1, nil),
-			wBig: wBig,
+			B:    mat.NewDense(config.NFilters, 1, nil),
+			WBig: wBig,
 		},
-		Activation: activation,
+		Activation: config.Activation,
 		Gradients:  gradients,
 		Optimizer:  optimizer,
-		NFilters:   nFilters,
+		NFilters:   config.NFilters,
 		NChannels:  nChannels,
-		FilterSize: filterSize,
-		Stride:     stride,
+		FilterSize: config.FilterSize,
+		Stride:     config.Stride,
 		Iter:       1,
 	}
 }
 
-func initializeConvParameters(nFilters, nChannels, filterSize int, activation activation) [][]*mat.Dense {
+func initializeConvParameters(nFilters, nChannels, filterSize int, activation nncore.Activation) [][]*mat.Dense {
 	fanIn := nChannels * filterSize * filterSize
 	fanOut := nFilters * filterSize * filterSize
 
 	scalar := 1.0
 	switch activation.Name {
-	case ReLUActivation, EluActivation:
+	case nncore.ReLUActivation, nncore.EluActivation:
 		scalar = math.Sqrt(2.0 / float64(fanIn)) // He (Kaiming)
 	default: // tanh, sigmoid, softmax, linear...
 		scalar = math.Sqrt(2.0 / float64(fanIn+fanOut)) // Xavier (Glorot)
@@ -166,7 +172,7 @@ func (cl *convLayer) ForwardPropagation(x []*mat.Dense) ([]*mat.Dense, []*mat.De
 	xBig := mat.NewDense(nChannels*K, P, nil)
 	for c := 0; c < nChannels; c++ {
 		// xCol will have a shape: K x P
-		xCol := Im2Col(x[c], cl.FilterSize, cl.FilterSize, stride)
+		xCol := ngo.Im2Col(x[c], cl.FilterSize, cl.FilterSize, stride)
 
 		raw := xCol.RawMatrix()
 		for k := 0; k < K; k++ {
@@ -183,7 +189,7 @@ func (cl *convLayer) ForwardPropagation(x []*mat.Dense) ([]*mat.Dense, []*mat.De
 	//     xBig: nChannels*K x P
 	// zBig will have a shape: nFilters x P.
 	// each row contains the flattened output feature map of one filter.
-	zBig := ngo.MatMul(cl.Parameters.wBig, xBig)
+	zBig := ngo.MatMul(cl.Parameters.WBig, xBig)
 	for f := 0; f < nFilters; f++ {
 		z := mat.NewDense(hOut, wOut, nil)
 		copy(
@@ -263,7 +269,7 @@ func (cl *convLayer) BackwardWeightGradients(x []*mat.Dense, dZBig *mat.Dense, s
 	xBig := mat.NewDense(nChannels*K, P, nil)
 	for c := 0; c < nChannels; c++ {
 		// xCol will have a shape: K x P
-		xCol := Im2Col(x[c], cl.FilterSize, cl.FilterSize, stride)
+		xCol := ngo.Im2Col(x[c], cl.FilterSize, cl.FilterSize, stride)
 
 		raw := xCol.RawMatrix()
 		for k := 0; k < K; k++ {
@@ -318,7 +324,7 @@ func (cl *convLayer) BackwardInputGradients(dZBig *mat.Dense, stride int) []*mat
 	// dxBig will have shape: nChannels*K x P.
 	// each input channel, a block of K rows stores the column representation
 	// of the input gradients, before reconstruction with Col2Im.
-	dxBig := ngo.MatMul(cl.Parameters.wBig.T(), dZBig)
+	dxBig := ngo.MatMul(cl.Parameters.WBig.T(), dZBig)
 
 	// initialize gradient for input x
 	// input dxPrev with shape (nChannels, hIn, wIn)
@@ -334,7 +340,7 @@ func (cl *convLayer) BackwardInputGradients(dZBig *mat.Dense, stride int) []*mat
 		}
 
 		// reconstruct the spatial gradient of this input channel.
-		dxPrev[c] = Col2Im(xCol, cl.InputShape[1], cl.InputShape[2], cl.FilterSize, cl.FilterSize, stride)
+		dxPrev[c] = ngo.Col2Im(xCol, cl.InputShape[1], cl.InputShape[2], cl.FilterSize, cl.FilterSize, stride)
 	}
 
 	return dxPrev
@@ -366,8 +372,7 @@ func (cl *convLayer) ReduceWorkerGradients(workerGradients []gradients) {
 
 // update parameters (optimization algorithm)
 func (cl *convLayer) UpdateParameters(learningRate float64) {
-	cl.Parameters = cl.Optimizer.Function(&cl.Optimizer, cl.Parameters, cl.Gradients.DW,
-		cl.Gradients.DB, learningRate, cl.Iter)
+	cl.Optimizer.Step(cl.TrainableParameters(), learningRate, cl.Iter)
 	cl.Iter++
 
 	// K is the number of weights per input channel
@@ -375,7 +380,7 @@ func (cl *convLayer) UpdateParameters(learningRate float64) {
 
 	// flattened weights after update
 	for f := 0; f < cl.NFilters; f++ {
-		row := cl.Parameters.wBig.RawRowView(f)
+		row := cl.Parameters.WBig.RawRowView(f)
 		for c := 0; c < cl.NChannels; c++ {
 			copy(
 				row[c*K:(c+1)*K],
@@ -391,4 +396,45 @@ func (cl *convLayer) UpdateParameters(learningRate float64) {
 		}
 	}
 	cl.Gradients.DB.Zero()
+}
+
+func (cl *convLayer) TrainableParameters() []*nncore.Parameter {
+	nFilters := len(cl.Parameters.W)
+	nChannels := len(cl.Parameters.W[0])
+
+	params := []*nncore.Parameter{}
+	for f := 0; f < nFilters; f++ {
+		for c := 0; c < nChannels; c++ {
+			params = append(params, &nncore.Parameter{
+				Value:    cl.Parameters.W[f][c],
+				Gradient: cl.Gradients.DW[f][c],
+				Update: func(m *mat.Dense) {
+					cl.Parameters.W[f][c] = m
+				},
+			})
+		}
+	}
+
+	params = append(params, &nncore.Parameter{
+		Value:    cl.Parameters.B,
+		Gradient: cl.Gradients.DB,
+		Update: func(m *mat.Dense) {
+			cl.Parameters.B = m
+		},
+	})
+
+	return params
+}
+
+func (cl *convLayer) MarshalParameters() ([]byte, error) {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(cl.Parameters); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (cl *convLayer) UnmarshalParameters(data []byte) error {
+	return gob.NewDecoder(bytes.NewReader(data)).Decode(&cl.Parameters)
 }
