@@ -46,9 +46,11 @@ type neuralModel struct {
 	LearningRate float64
 	Epochs       int
 	BatchSize    int
+	Seed         *uint64
 }
 
 type fitConfig struct {
+	Shuffle     bool
 	Verbose     bool
 	LogInterval int
 }
@@ -108,6 +110,18 @@ func WithL2Regularization(lambd float64) func(*neuralModel) {
 func WithDropout(dropout float64) func(*neuralModel) {
 	return func(nm *neuralModel) {
 		nm.Dense.Dropout = dropout
+	}
+}
+
+func WithSeed(seed uint64) func(*neuralModel) {
+	return func(nm *neuralModel) {
+		nm.Seed = &seed
+	}
+}
+
+func WithShuffle(shuffle bool) func(*fitConfig) {
+	return func(c *fitConfig) {
+		c.Shuffle = shuffle
 	}
 }
 

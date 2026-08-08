@@ -3,6 +3,7 @@ package mlp
 import (
 	"fmt"
 	"math"
+	"math/rand/v2"
 	"os"
 	"time"
 
@@ -13,7 +14,6 @@ import (
 
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"
-	"gonum.org/v1/gonum/stat"
 )
 
 // performs model training using the xTrain and yTrain matrices.
@@ -24,6 +24,7 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig
 
 	// default values
 	config := fitConfig{
+		Shuffle:     true,
 		Verbose:     true,
 		LogInterval: 1,
 	}
@@ -36,29 +37,51 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig
 	// keep track of the loss
 	losses := []float64{}
 
+	// create a fixed index slice to map the columns
+	indices := make([]int, nSamples)
+
 	// loop
 	iterPerEpoch := int(math.Ceil(float64(nSamples) / float64(nm.BatchSize)))
 	for i := 1; i <= nm.Epochs; i++ {
 		start := time.Now()
-		lossBatches := []float64{}
+
+		var totalLoss float64
+		var totalWeight float64
+
+		if config.Shuffle {
+			for idx := range indices {
+				indices[idx] = idx
+			}
+
+			rng := newRand(nm.Seed)
+			rng.Shuffle(nSamples, func(i, j int) {
+				indices[i], indices[j] = indices[j], indices[i]
+			})
+		}
 
 		bar := progressBar(iterPerEpoch, fmt.Sprintf("epoch %5d/%d: ", i, nm.Epochs), config.Verbose)
 		for startIdx := 0; startIdx < nSamples; startIdx += nm.BatchSize {
 			bar.Add(1)
-			endIdx := startIdx + nm.BatchSize
-			if endIdx > nSamples {
-				endIdx = nSamples
-			}
+			endIdx := min(startIdx+nm.BatchSize, nSamples)
+			batchSize := float64(endIdx - startIdx)
 
-			xBatch := xTrain.Slice(0, xTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)
-			yBatch := yTrain.Slice(0, yTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)
+			var xBatch, yBatch *mat.Dense
+			if config.Shuffle {
+				batchIndices := indices[startIdx:endIdx]
+				xBatch = ngo.GatherColumns(xTrain, batchIndices)
+				yBatch = ngo.GatherColumns(yTrain, batchIndices)
+			} else {
+				xBatch = xTrain.Slice(0, xTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)
+				yBatch = yTrain.Slice(0, yTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)
+			}
 
 			// forward propagation
 			yHat, Z, A, D := nm.Dense.ForwardPropagation(xBatch, true)
 
 			// loss function
 			loss := nm.LossFunction(yHat, yBatch, nm.Dense.Parameters, nm.Dense.L2Regularization)
-			lossBatches = append(lossBatches, loss)
+			totalLoss += loss * batchSize
+			totalWeight += batchSize
 
 			// backward propagation
 			_, dW, db := nm.Dense.BackwardPropagation(Z, A, D, yBatch)
@@ -68,7 +91,7 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig
 		}
 
 		// print the loss every x iterations
-		meanLoss := stat.Mean(lossBatches, nil)
+		meanLoss := totalLoss / totalWeight
 		if config.Verbose && (i%config.LogInterval == 0 || i == 1 || i == nm.Epochs) {
 			if nm.Mode == nncore.ModeRegression {
 				fmt.Printf(" | t: %7.2fms | loss: %.6e \n", float64(time.Since(start))/float64(time.Millisecond), meanLoss)
@@ -160,4 +183,16 @@ func progressBar(iter int, description string, verbose bool) *progressbar.Progre
 			SaucerPadding: " ",
 		}),
 	)
+}
+
+// initializing permutation
+func newRand(seed *uint64) *rand.Rand {
+	if seed != nil {
+		return rand.New(rand.NewPCG(*seed, *seed))
+	}
+
+	return rand.New(rand.NewPCG(
+		uint64(time.Now().UnixNano()),
+		uint64(time.Now().UnixNano()),
+	))
 }

@@ -273,3 +273,21 @@ func Multiply(a, b mat.Matrix) *mat.Dense {
 
 	return m
 }
+
+// gather columns according to the given permutation indices
+func GatherColumns(x *mat.Dense, indices []int) *mat.Dense {
+	xRaw := x.RawMatrix()
+
+	m := mat.NewDense(xRaw.Rows, len(indices), nil)
+	mRaw := m.RawMatrix()
+	for row := 0; row < xRaw.Rows; row++ {
+		xRowOffset := row * xRaw.Stride
+		mRowOffset := row * mRaw.Stride
+
+		for newCol, oldCol := range indices {
+			mRaw.Data[mRowOffset+newCol] = xRaw.Data[xRowOffset+oldCol]
+		}
+	}
+
+	return m
+}

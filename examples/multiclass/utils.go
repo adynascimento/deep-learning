@@ -73,7 +73,7 @@ func LoadFromImage(path string) *mat.Dense {
 
 	m := mat.NewDense(len(grayImg.Pix), 1, nil)
 	for i, v := range grayImg.Pix {
-		m.Set(i, 0, float64(v))
+		m.Set(i, 0, float64(v)/255.0)
 	}
 
 	return m

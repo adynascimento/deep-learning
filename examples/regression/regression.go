@@ -32,8 +32,11 @@ func main() {
 	model := neural.NewTrainer(mlp.TrainerConfig{
 		Optimizer:    nncore.AdamOptimizer, // optimizer
 		LearningRate: 0.001,                // learning rate
-		Epochs:       10000},               // number of iterations
-		mlp.WithL2Regularization(1.40e-06))
+		Epochs:       500},                 // number of iterations
+		mlp.WithL2Regularization(1.40e-06),
+		mlp.WithBatchSize(32),
+		mlp.WithSeed(42),
+	)
 	model.Fit(xTrain, yTrain)
 
 	// saves neural network model to file
@@ -57,7 +60,7 @@ func main() {
 	plt.YLabel("y values")
 	plt.Legend("function", "prediction")
 	plt.XLim(0.0, 1.0)
-	plt.YLim(-1.0, 1.0)
+	plt.YLim(-1.1, 1.1)
 	plt.Grid()
 
 	plt.Show()
