@@ -14,7 +14,8 @@ A comprehensive deep learning library written in Go from scratch, featuring supp
 - Optimizers: Adam, Gradient Descent
 - L2 Regularization
 - Dropout Regularization
-- Batch training with customizable batch size
+- Mini-batch training with configurable batch size
+- Sample shuffling between epochs
 
 ### 🖼️ Convolutional Neural Networks (CNN)
 - 2D convolutional layers with customizable filters
@@ -34,7 +35,7 @@ A comprehensive deep learning library written in Go from scratch, featuring supp
 - Model performance comparison
 - JSON results export
 
-### 📊 Mathematical Utilities (NGO)
+### 📊 Numerical and Mathematical Utilities (NGO)
 - Matrix operations with Gonum
 - **StandardScaler**: Feature standardization with Fit/Transform/FitTransform/InverseTransform
 - **PCA (Principal Component Analysis)**: Dimensionality reduction with explained variance tracking
@@ -66,7 +67,7 @@ A comprehensive deep learning library written in Go from scratch, featuring supp
 - ✔ Model serialization
 - ✔ Natural Language Processing utilities
 - ✔ Mathematical utilities (PCA, StandardScaler, Sampling Functions)
-- ✔ Batch training
+- ✔ Mini-batch training with optional data shuffling
 
 ## 🎯 Usage Examples
 
@@ -82,14 +83,14 @@ import (
 
 func main() {
 	// create model
-	neural := mlp.NewNeuralNetwork(network.NeuralConfig{
+	neural := mlp.NewNeuralNetwork(mlp.NeuralConfig{
 		NNStructure: []int{1, 40, 20, 10, 1},
 		Activation:  nncore.TanhActivation,
 		Mode:        nncore.ModeRegression,
 	})
 
 	// train
-	model := neural.NewTrainer(network.TrainerConfig{
+	model := neural.NewTrainer(mlp.TrainerConfig{
 		Optimizer:    nncore.AdamOptimizer,
 		LearningRate: 0.001,
 		Epochs:       100},
@@ -116,6 +117,18 @@ func main() {
 | Dense Layer 4 | (None, 1)    |      11 |
 |---------------|--------------|---------|
 ```
+
+**Sinusoidal Function Prediction**:
+<table>
+  <tr>
+    <td>
+      <img src="examples/regression/training.gif" width="400" alt="Neural Network Training">
+    </td>
+    <td>
+      <img src="examples/regression/loss.gif" width="400" alt="Neural Network Loss">
+    </td>
+  </tr>
+</table>
 
 **Use case**: Suitable for regression problems such as price prediction, temperature forecasting, time series analysis, etc.
 
@@ -181,6 +194,33 @@ func main() {
 |----------------------|--------------------|---------|
 ```
 
+**MNIST Prediction**:
+```
+epoch     1/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  355.33ms | loss: 1.404039e+00 | acc: 0.7510 
+epoch     2/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  313.77ms | loss: 4.709101e-01 | acc: 0.9110 
+epoch     3/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  356.54ms | loss: 2.755988e-01 | acc: 0.9450 
+epoch     4/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  308.44ms | loss: 1.705021e-01 | acc: 0.9640 
+epoch     5/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  314.44ms | loss: 1.190550e-01 | acc: 0.9870 
+epoch     6/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  313.54ms | loss: 7.712814e-02 | acc: 0.9920 
+epoch     7/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  359.03ms | loss: 5.899423e-02 | acc: 0.9980 
+epoch     8/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  310.95ms | loss: 4.190740e-02 | acc: 0.9980 
+epoch     9/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  317.58ms | loss: 2.504125e-02 | acc: 0.9990 
+epoch    10/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  403.54ms | loss: 1.748601e-02 | acc: 1.0000 
+epoch    11/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  306.53ms | loss: 1.432969e-02 | acc: 1.0000 
+epoch    12/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  307.43ms | loss: 1.292305e-02 | acc: 1.0000 
+epoch    13/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  307.17ms | loss: 7.712410e-03 | acc: 1.0000 
+epoch    14/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  354.81ms | loss: 6.105613e-03 | acc: 1.0000 
+epoch    15/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  309.86ms | loss: 4.989471e-03 | acc: 1.0000 
+epoch    16/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  305.67ms | loss: 4.089591e-03 | acc: 1.0000 
+epoch    17/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  356.38ms | loss: 3.658072e-03 | acc: 1.0000 
+epoch    18/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  309.64ms | loss: 2.997197e-03 | acc: 1.0000 
+epoch    19/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  357.45ms | loss: 2.642009e-03 | acc: 1.0000 
+epoch    20/20:  100% ━━━━━━━━━━━━━━━━━━━━ (32/32) [0s] | t:  308.07ms | loss: 2.363765e-03 | acc: 1.0000 
+
+accuracy of training data: 1.0000 
+accuracy of testing data:  0.9457 
+```
+
 **Use case**: Complex image classification, object detection, facial recognition, etc.
 
 ---
@@ -217,14 +257,14 @@ func main() {
 	// define objective function
 	objective := func(trialID int, params hyperopt.Params) float64 {
 		// neural network model
-		neural := mlp.NewNeuralNetwork(network.NeuralConfig{
+		neural := mlp.NewNeuralNetwork(mlp.NeuralConfig{
 			NNStructure: params.NNStructure,    // neural network structure
 			Activation:  nncore.TanhActivation, // activation function
 			Mode:        nncore.ModeMultiClass, // mode determines output layer activation and loss function
 		})
 
 		// optimizer to train the model
-		model := neural.NewTrainer(network.TrainerConfig{
+		model := neural.NewTrainer(mlp.TrainerConfig{
 			Optimizer:    nncore.AdamOptimizer,  // optimizer
 			LearningRate: params.LearningRate,   // learning rate
 			Epochs:       400},                  // number of iterations
@@ -317,7 +357,19 @@ func main() {
 }
 ```
 
-**Use case**: Feature preprocessing, curse of dimensionality reduction, data compression before training.
+**MNIST - PCA Dimensionality Reduction**:
+<table>
+  <tr>
+    <td>
+      <img src="examples/pca/pca_reduction.png" width="485" alt="PCA Dimensionality Reduction">
+    </td>
+    <td>
+      <img src="examples/pca/pca_variance.png" width="420" alt="PCA Variance">
+    </td>
+  </tr>
+</table>
+
+**Use case**: Feature preprocessing, dimensionality reduction, and data compression before training.
 
 ---
 
@@ -452,7 +504,8 @@ lr := ngo.SuggestLogFloat(1e-5, 1e-1) // logarithmically distributed
 ### Batch Training
 ```go
 model := neural.NewTrainer(config,
-	mlp.WithBatchSize(32))
+	mlp.WithBatchSize(32),
+	mlp.WithShuffle(true))
 ```
 
 ### Regularization Techniques
