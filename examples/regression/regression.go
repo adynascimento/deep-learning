@@ -47,18 +47,20 @@ func main() {
 
 	// plotting
 	plt := plotter.NewPlot()
-	plt.FigSize(12, 9)
+	plt.FigSize(12, 10)
 
 	plt.Plot(xTrain.RawMatrix().Data, yTrain.RawMatrix().Data)
 	plt.Plot(xTrain.RawMatrix().Data, yPred.RawMatrix().Data,
 		plotter.WithLineColor(plotter.Blue),
-		plotter.WithMarker(plotter.Circle),
-		plotter.WithMarkerSpacing(8),
+		plotter.WithLineStyle(plotter.Dashed),
+		plotter.WithLineMarker(plotter.Circle),
+		plotter.WithLineMarkerSpacing(10),
+		plotter.WithLineWidth(2.5),
 	)
 	plt.Title("neural network predictions")
 	plt.XLabel("x values")
 	plt.YLabel("y values")
-	plt.Legend("function", "prediction")
+	plt.Legend("true", "prediction").Location(plotter.LowerLeft)
 	plt.XLim(0.0, 1.0)
 	plt.YLim(-1.1, 1.1)
 	plt.Grid()
