@@ -59,7 +59,8 @@ func main() {
 		LearningRate: 0.001,                // learning rate
 		Epochs:       20},                  // number of iterations
 		cnn.WithBatchSize(32),
-		cnn.WithL2Regularization(1.40e-06))
+		cnn.WithL2Regularization(1.40e-06),
+	)
 	model.Summary()
 	model.Fit(xTrain, yTrain)
 

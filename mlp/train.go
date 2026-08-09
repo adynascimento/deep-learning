@@ -48,11 +48,11 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig
 		var totalLoss float64
 		var totalWeight float64
 
+		// generate a shuffled sample order for the current epoch
 		if config.Shuffle {
 			for idx := range indices {
 				indices[idx] = idx
 			}
-
 			rng := newRand(nm.Seed)
 			rng.Shuffle(nSamples, func(i, j int) {
 				indices[i], indices[j] = indices[j], indices[i]
@@ -65,11 +65,12 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig
 			endIdx := min(startIdx+nm.BatchSize, nSamples)
 			batchSize := float64(endIdx - startIdx)
 
+			// gather the current batch according to the sample order
 			var xBatch, yBatch *mat.Dense
 			if config.Shuffle {
 				batchIndices := indices[startIdx:endIdx]
-				xBatch = ngo.GatherColumns(xTrain, batchIndices)
-				yBatch = ngo.GatherColumns(yTrain, batchIndices)
+				xBatch = ngo.GatherSamples(xTrain, batchIndices).(*mat.Dense)
+				yBatch = ngo.GatherSamples(yTrain, batchIndices).(*mat.Dense)
 			} else {
 				xBatch = xTrain.Slice(0, xTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)
 				yBatch = yTrain.Slice(0, yTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)

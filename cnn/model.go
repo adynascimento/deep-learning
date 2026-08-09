@@ -62,6 +62,7 @@ type cnnModel struct {
 	LearningRate    float64
 	Epochs          int
 	BatchSize       int
+	Seed            *uint64
 }
 
 type cnnForwardOutputs struct {
@@ -70,6 +71,7 @@ type cnnForwardOutputs struct {
 }
 
 type fitConfig struct {
+	Shuffle     bool
 	Verbose     bool
 	LogInterval int
 }
@@ -218,6 +220,18 @@ func WithL2Regularization(lambd float64) func(*cnnModel) {
 func WithDropout(dropout float64) func(*cnnModel) {
 	return func(nm *cnnModel) {
 		nm.DenseLayer.Dropout = dropout
+	}
+}
+
+func WithSeed(seed uint64) func(*cnnModel) {
+	return func(nm *cnnModel) {
+		nm.Seed = &seed
+	}
+}
+
+func WithShuffle(shuffle bool) func(*fitConfig) {
+	return func(c *fitConfig) {
+		c.Shuffle = shuffle
 	}
 }
 
