@@ -31,7 +31,7 @@ func main() {
 	floats.CumSum(y, pca.GetExplainedVariance())
 
 	plt := plotter.NewPlot()
-	plt.FigSize(12, 10)
+	plt.FigSize(12, 11)
 
 	plt.Scatter(xTrainReduced.RawRowView(0), xTrainReduced.RawRowView(1), labels,
 		plotter.WithScatterColorMap(plotter.Tab10),
@@ -46,7 +46,7 @@ func main() {
 	plt.Save("pca_reduction.png")
 
 	plt = plotter.NewPlot()
-	plt.FigSize(12, 10)
+	plt.FigSize(12, 11)
 	
 	plt.Plot(x, y)
 	plt.Plot(x, ngo.Linspace(floats.Max(y), floats.Max(y), len(x)),

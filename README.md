@@ -361,15 +361,15 @@ func main() {
 <table>
   <tr>
     <td>
-      <img src="examples/pca/pca_reduction.png" width="465" alt="PCA Dimensionality Reduction">
+      <img src="examples/pca/pca_reduction.png" width="485" alt="PCA Dimensionality Reduction">
     </td>
     <td>
-      <img src="examples/pca/pca_variance.png" width="400" alt="PCA Variance">
+      <img src="examples/pca/pca_variance.png" width="420" alt="PCA Variance">
     </td>
   </tr>
 </table>
 
-**Use case**: Feature preprocessing, curse of dimensionality reduction, data compression before training.
+**Use case**: Feature preprocessing, dimensionality reduction, and data compression before training.
 
 ---
 
