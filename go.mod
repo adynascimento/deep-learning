@@ -3,7 +3,7 @@ module github.com/adynascimento/deep-learning
 go 1.25.0
 
 require (
-	github.com/adynascimento/plot v1.4.1
+	github.com/adynascimento/plot v1.5.3
 	github.com/c-bata/goptuna v0.9.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/schollz/progressbar/v3 v3.14.4
@@ -27,11 +27,12 @@ require (
 	github.com/mazznoer/csscolorparser v0.1.0 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
+	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/exp/shiny v0.0.0-20260603202125-055de637280b // indirect
-	golang.org/x/image v0.40.0 // indirect
-	golang.org/x/net v0.48.0 // indirect
-	golang.org/x/sys v0.44.0 // indirect
-	golang.org/x/term v0.38.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
+	golang.org/x/image v0.43.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/term v0.43.0 // indirect
+	golang.org/x/text v0.39.0 // indirect
 	gonum.org/v1/plot v0.11.0 // indirect
 )

@@ -3,6 +3,7 @@ package cnn
 import (
 	"fmt"
 	"math"
+	"math/rand/v2"
 	"os"
 	"strconv"
 	"sync"
@@ -14,7 +15,6 @@ import (
 	"github.com/schollz/progressbar/v3"
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"
-	"gonum.org/v1/gonum/stat"
 )
 
 // cnn forward propagation step
@@ -137,6 +137,7 @@ func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...fun
 
 	// default values
 	config := fitConfig{
+		Shuffle:     true,
 		Verbose:     true,
 		LogInterval: 1,
 	}
@@ -149,38 +150,60 @@ func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...fun
 	// keep track of the loss
 	losses := []float64{}
 
+	// create a fixed index slice to map the samples
+	indices := make([]int, nSamples)
+
 	// loop
 	iterPerEpoch := int(math.Ceil(float64(nSamples) / float64(cm.BatchSize)))
 	for i := 1; i <= cm.Epochs; i++ {
 		start := time.Now()
-		weights := []float64{}
-		lossBatches := []float64{}
+
+		var totalLoss float64
+		var totalWeight float64
+
+		// generate a shuffled sample order for the current epoch
+		if config.Shuffle {
+			for idx := range indices {
+				indices[idx] = idx
+			}
+			rng := newRand(cm.Seed)
+			rng.Shuffle(nSamples, func(i, j int) {
+				indices[i], indices[j] = indices[j], indices[i]
+			})
+		}
 
 		bar := progressBar(iterPerEpoch, fmt.Sprintf("epoch %5d/%d: ", i, cm.Epochs), config.Verbose)
 		for startIdx := 0; startIdx < nSamples; startIdx += cm.BatchSize {
 			bar.Add(1)
-			endIdx := startIdx + cm.BatchSize
-			if endIdx > nSamples {
-				endIdx = nSamples
-			}
+			endIdx := min(startIdx+cm.BatchSize, nSamples)
+			batchSize := float64(endIdx - startIdx)
 
-			xBatch := xTrain[startIdx:endIdx]
-			yBatch := yTrain.Slice(0, yTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)
+			// gather the current batch according to the sample order
+			var xBatch [][]*mat.Dense
+			var yBatch *mat.Dense
+			if config.Shuffle {
+				batchIndices := indices[startIdx:endIdx]
+				xBatch = ngo.GatherSamples(xTrain, batchIndices).([][]*mat.Dense)
+				yBatch = ngo.GatherSamples(yTrain, batchIndices).(*mat.Dense)
+			} else {
+				xBatch = xTrain[startIdx:endIdx]
+				yBatch = yTrain.Slice(0, yTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)
+			}
 
 			// forward propagation
 			yPred, Z, A, D := cm.ForwardPropagation(xBatch, true)
 
 			// loss function
 			loss := cm.LossFunction(yPred, yBatch, cm.DenseLayer.Parameters, cm.DenseLayer.L2Regularization)
-			lossBatches = append(lossBatches, loss)
-			weights = append(weights, float64(len(xBatch)))
+			totalLoss += loss * batchSize
+			totalWeight += batchSize
 
 			// backward propagation with update parameters (optimization algorithm)
 			cm.BackwardPropagation(Z, A, D, yBatch)
 		}
 
 		// print the loss every x iterations
-		meanLoss := stat.Mean(lossBatches, weights)
+		meanLoss := totalLoss / totalWeight
 		if config.Verbose && (i%config.LogInterval == 0 || i == 1 || i == cm.Epochs) {
 			fmt.Printf(" | t: %7.2fms | loss: %.6e | acc: %.4f \n",
 				float64(time.Since(start))/float64(time.Millisecond), meanLoss, cm.Evaluate(xTrain, yTrain))
@@ -285,4 +308,16 @@ func progressBar(iter int, description string, verbose bool) *progressbar.Progre
 			SaucerPadding: " ",
 		}),
 	)
+}
+
+// initializing permutation
+func newRand(seed *uint64) *rand.Rand {
+	if seed != nil {
+		return rand.New(rand.NewPCG(*seed, *seed))
+	}
+
+	return rand.New(rand.NewPCG(
+		uint64(time.Now().UnixNano()),
+		uint64(time.Now().UnixNano()),
+	))
 }

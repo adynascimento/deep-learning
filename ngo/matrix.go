@@ -273,3 +273,32 @@ func Multiply(a, b mat.Matrix) *mat.Dense {
 
 	return m
 }
+
+// gather samples according to the given permutation indices
+func GatherSamples(x any, indices []int) any {
+	switch x := x.(type) {
+	case *mat.Dense:
+		xRaw := x.RawMatrix()
+		m := mat.NewDense(xRaw.Rows, len(indices), nil)
+		mRaw := m.RawMatrix()
+		for row := 0; row < xRaw.Rows; row++ {
+			xRowOffset := row * xRaw.Stride
+			mRowOffset := row * mRaw.Stride
+
+			for newCol, oldCol := range indices {
+				mRaw.Data[mRowOffset+newCol] = xRaw.Data[xRowOffset+oldCol]
+			}
+		}
+		return m
+
+	case [][]*mat.Dense:
+		m := make([][]*mat.Dense, len(indices))
+		for i, idx := range indices {
+			m[i] = x[idx]
+		}
+		return m
+
+	default:
+		panic("unsupported type")
+	}
+}
