@@ -119,18 +119,12 @@ func main() {
 ```
 
 **Sinusoidal Function Prediction**:
-<table>
-  <tr>
-    <td>
-      <img src="examples/regression/training.gif" width="400" alt="Neural Network Training">
-    </td>
-    <td>
-      <img src="examples/regression/loss.gif" width="400" alt="Neural Network Loss">
-    </td>
-  </tr>
-</table>
+<p align="left">
+  <img src="examples/regression/training.gif" width="400" alt="Neural Network Training">&nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="examples/regression/loss.gif" width="400" alt="Neural Network Loss">
+</p>
 
-**Use case**: Suitable for regression problems such as price prediction, temperature forecasting, time series analysis, etc.
+**Use case**: Regression problems such as price prediction, temperature forecasting, time series analysis, etc.
 
 ---
 
@@ -358,16 +352,10 @@ func main() {
 ```
 
 **MNIST - PCA Dimensionality Reduction**:
-<table>
-  <tr>
-    <td>
-      <img src="examples/pca/pca_reduction.png" width="485" alt="PCA Dimensionality Reduction">
-    </td>
-    <td>
-      <img src="examples/pca/pca_variance.png" width="420" alt="PCA Variance">
-    </td>
-  </tr>
-</table>
+<p align="left">
+  <img src="examples/pca/pca_reduction.png" width="440" alt="PCA Dimensionality Reduction">&nbsp;&nbsp;&nbsp;
+  <img src="examples/pca/pca_variance.png" width="378" alt="PCA Variance">
+</p>
 
 **Use case**: Feature preprocessing, dimensionality reduction, and data compression before training.
 
