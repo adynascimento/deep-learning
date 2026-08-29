@@ -3,6 +3,15 @@ package main
 import (
 	"fmt"
 
+	/*
+		#cgo CFLAGS: -g -O2
+		#cgo LDFLAGS: -framework Accelerate
+	*/
+	"C"
+
+	"gonum.org/v1/gonum/blas/blas64"
+	"gonum.org/v1/netlib/blas/netlib"
+
 	"github.com/adynascimento/deep-learning/cnn"
 	"github.com/adynascimento/deep-learning/ngo"
 	"github.com/adynascimento/deep-learning/nncore"
@@ -10,6 +19,8 @@ import (
 )
 
 func main() {
+	blas64.Use(netlib.Implementation{})
+
 	// training data
 	x := LoadDataFromFile("../../dataset/cats-vs-dogs/train_x.csv")
 	v := LoadDataFromFile("../../dataset/cats-vs-dogs/test_x.csv")
@@ -58,15 +69,17 @@ func main() {
 		Activation: nncore.ReLUActivation,
 		Mode:       nncore.ModeMultiLabel,
 	})
-	neural.AddConv2DLayer(8, 3, 1)
+	neural.AddConv2DLayer(16, 3, 1)
 	neural.AddMaxPooling2DLayer(2, 2)
-	neural.AddDenseLayer([]int{64, yTrain.RawMatrix().Rows})
+	neural.AddConv2DLayer(32, 3, 1)
+	neural.AddMaxPooling2DLayer(2, 2)
+	neural.AddDenseLayer([]int{32, yTrain.RawMatrix().Rows})
 
 	// optimizer to train the model
 	model := neural.NewTrainer(cnn.TrainerConfig{
 		Optimizer:    nncore.AdamOptimizer,
 		LearningRate: 0.001,
-		Epochs:       30},
+		Epochs:       20},
 		cnn.WithBatchSize(32),
 	)
 	model.Summary()

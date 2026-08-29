@@ -235,33 +235,33 @@ import (
 
 func main() {
 	// define search space
-	space := hyperopt.SearchSpace{
-			InputDim:          xTrain.RawMatrix().Rows,
-			OutputDim:         yTrain.RawMatrix().Rows,
-			NLayersRange:      []int{3, 5},           // minimum and maximum number of layers
-			NHiddenRange:      []int{50, 100},        // minimum and maximum number of hidden units per layer
-			LearningRateRange: []float64{1e-4, 1e-2}, // minimum and maximum of learning rate
-			LambdRange:        []float64{1e-6, 1e-2}, // minimum and maximum of regularization parameter
-			NModels:           3,                     // number of models
-		})
+	space := mlp.SearchSpace{
+		InputDim:          xTrain.RawMatrix().Rows,
+		OutputDim:         yTrain.RawMatrix().Rows,
+		NLayersRange:      mlp.IntRange{Min: 3, Max: 5},         // minimum and maximum number of layers
+		NHiddenRange:      mlp.IntRange{Min: 50, Max: 100},      // minimum and maximum number of hidden units per layers
+		LearningRateRange: mlp.FloatRange{Min: 1e-4, Max: 1e-2}, // minimum and maximum of learning rate
+		L2Range:           mlp.FloatRange{Min: 1e-6, Max: 1e-2}, // minimum and maximum of regularization parameter
+		NTrials:           3,                                    // number of trials
+	}
 
 	// create optimizer
-	hp := hyperopt.NewHyperparameterOptimization(space)
+	hp := mlp.NewHyperopt(space)
 
 	// define objective function
-	objective := func(trialID int, params hyperopt.Params) float64 {
+	objective := func(trialID int, params mlp.Params) float64 {
 		// neural network model
 		neural := mlp.NewNeuralNetwork(mlp.NeuralConfig{
 			NNStructure: params.NNStructure,    // neural network structure
-			Activation:  nncore.TanhActivation, // activation function
+			Activation:  nncore.ReLUActivation, // activation function
 			Mode:        nncore.ModeMultiClass, // mode determines output layer activation and loss function
 		})
 
 		// optimizer to train the model
 		model := neural.NewTrainer(mlp.TrainerConfig{
-			Optimizer:    nncore.AdamOptimizer,  // optimizer
-			LearningRate: params.LearningRate,   // learning rate
-			Epochs:       400},                  // number of iterations
+			Optimizer:    nncore.AdamOptimizer, // optimizer
+			LearningRate: params.LearningRate,  // learning rate
+			Epochs:       20},                  // number of epochs
 			mlp.WithBatchSize(32),
 			mlp.WithL2Regularization(params.L2Regularization),
 		)
@@ -269,18 +269,17 @@ func main() {
 		model.Save("./trials/model" + strconv.Itoa(trialID) + ".json")
 
 		// make predictions and evaluate model
-		return model.Evaluate(xTrain, yTrain)
+		return model.Evaluate(xTest, yTest)
 	}
 
     // bayesian optimization
-	hp.BayesianOptimization(hyperopt.Maximize, objective)
+	hp.Optimize(hyperopt.Bayesian, hyperopt.Maximize, objective)
 
 	// or random search
-	hp.RandomSearchOptimization(hyperopt.Maximize, objective)
+	hp.Optimize(hyperopt.RandomSearch, hyperopt.Maximize, objective)
 	
 	// get best parameters
-	bestParams := hp.GetBestParams()
-	fmt.Println("best parameters:", bestParams)
+	fmt.Println("best params:", hp.GetBestParams())
 }
 ```
 
