@@ -43,10 +43,12 @@ type neuralNetwork struct {
 
 type neuralModel struct {
 	*neuralNetwork
-	LearningRate float64
-	Epochs       int
-	BatchSize    int
-	Seed         *uint64
+	LearningRate     float64
+	Epochs           int
+	BatchSize        int
+	L2Regularization float64
+	Dropout          float64
+	Seed             *uint64
 }
 
 type fitConfig struct {
@@ -79,18 +81,21 @@ func (nn *neuralNetwork) NewTrainer(config TrainerConfig, options ...func(*neura
 		BatchSize:     32,
 	}
 
+	// apply additional options
+	for _, option := range options {
+		option(&model)
+	}
+
 	// initializing dense layer
 	model.Dense = nncore.NewDense(nncore.DenseConfig{
 		NNStructure:      nn.NNStructure,
 		Activation:       nn.Activation,
 		OutputActivation: nn.OutputActivation,
 		Optimizer:        config.Optimizer,
+		L2Regularization: model.L2Regularization,
+		Dropout:          model.Dropout,
+		RNG:              nncore.NewRand(model.Seed),
 	})
-
-	// apply additional options
-	for _, option := range options {
-		option(&model)
-	}
 
 	return &model
 }
@@ -103,13 +108,13 @@ func WithBatchSize(batchSize int) func(*neuralModel) {
 
 func WithL2Regularization(lambd float64) func(*neuralModel) {
 	return func(nm *neuralModel) {
-		nm.Dense.L2Regularization = lambd
+		nm.L2Regularization = lambd
 	}
 }
 
 func WithDropout(dropout float64) func(*neuralModel) {
 	return func(nm *neuralModel) {
-		nm.Dense.Dropout = dropout
+		nm.Dropout = dropout
 	}
 }
 

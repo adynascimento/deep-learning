@@ -90,9 +90,9 @@ func DivMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
 
 // generate a random slice of float64
 func Randn(n, m int) *mat.Dense {
-	random := []float64{}
-	for i := 0; i < n*m; i++ {
-		random = append(random, rand.NormFloat64())
+	random := make([]float64, n*m)
+	for i := range random {
+		random[i] = rand.NormFloat64()
 	}
 
 	return mat.NewDense(n, m, random)

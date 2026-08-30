@@ -15,6 +15,9 @@ type DenseConfig struct {
 	Activation       Activation
 	OutputActivation OutputActivation
 	Optimizer        OptimizerType
+	L2Regularization float64
+	Dropout          float64
+	RNG              *RNG
 }
 
 type Dense struct {
@@ -25,11 +28,12 @@ type Dense struct {
 	Iter             float64
 	L2Regularization float64
 	Dropout          float64
+	RNG              *RNG
 }
 
 func NewDense(config DenseConfig) *Dense {
 	// initializing the model parameters
-	parameters := initializeDenseParameters(config.NNStructure, config.Activation)
+	parameters := initializeDenseParameters(config.NNStructure, config.Activation, config.RNG)
 
 	// choice of optimization algorithm
 	optimizer := NewOptimizer(config.Optimizer)
@@ -40,11 +44,14 @@ func NewDense(config DenseConfig) *Dense {
 		Optimizer:        optimizer,
 		Parameters:       parameters,
 		Iter:             1,
+		L2Regularization: config.L2Regularization,
+		Dropout:          config.Dropout,
+		RNG:              config.RNG.Spawn(),
 	}
 }
 
 // initializing the model parameters
-func initializeDenseParameters(nnStructure []int, activation Activation) map[string]*mat.Dense {
+func initializeDenseParameters(nnStructure []int, activation Activation, rng *RNG) map[string]*mat.Dense {
 	parameters := make(map[string]*mat.Dense) // map containing the parameters
 	L := len(nnStructure) - 1                 // number of layers
 
@@ -64,7 +71,7 @@ func initializeDenseParameters(nnStructure []int, activation Activation) map[str
 			}
 		}
 
-		parameters["W"+strconv.Itoa(l+1)] = ngo.Scale(scalar, ngo.Randn(nnStructure[l+1], nnStructure[l]))
+		parameters["W"+strconv.Itoa(l+1)] = ngo.Scale(scalar, rng.Randn(nnStructure[l+1], nnStructure[l]))
 		parameters["b"+strconv.Itoa(l+1)] = mat.NewDense(nnStructure[l+1], 1, nil)
 	}
 
@@ -88,7 +95,7 @@ func (dn *Dense) ForwardPropagation(x *mat.Dense, training bool) (*mat.Dense, ma
 
 		// apply dropout
 		if training && dn.Dropout > 0 {
-			D[strconv.Itoa(l+1)] = DropoutMask(A[strconv.Itoa(l+1)], dn.Dropout)
+			D[strconv.Itoa(l+1)] = DropoutMask(A[strconv.Itoa(l+1)], dn.Dropout, dn.RNG)
 			ApplyDropoutMask(A[strconv.Itoa(l+1)], D[strconv.Itoa(l+1)], dn.Dropout)
 		}
 	}

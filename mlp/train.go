@@ -3,7 +3,6 @@ package mlp
 import (
 	"fmt"
 	"math"
-	"math/rand/v2"
 	"os"
 	"time"
 
@@ -53,7 +52,7 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig
 			for idx := range indices {
 				indices[idx] = idx
 			}
-			rng := newRand(nm.Seed)
+			rng := nncore.NewRand(nm.Seed)
 			rng.Shuffle(nSamples, func(i, j int) {
 				indices[i], indices[j] = indices[j], indices[i]
 			})
@@ -184,16 +183,4 @@ func progressBar(iter int, description string, verbose bool) *progressbar.Progre
 			SaucerPadding: " ",
 		}),
 	)
-}
-
-// initializing permutation
-func newRand(seed *uint64) *rand.Rand {
-	if seed != nil {
-		return rand.New(rand.NewPCG(*seed, *seed))
-	}
-
-	return rand.New(rand.NewPCG(
-		uint64(time.Now().UnixNano()),
-		uint64(time.Now().UnixNano()),
-	))
 }
