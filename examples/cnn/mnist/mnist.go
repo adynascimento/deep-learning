@@ -28,15 +28,15 @@ func main() {
 	x = ngo.Apply(applyNormalization, x)
 	v = ngo.Apply(applyNormalization, v)
 
-	xTrain := make([][]*mat.Dense, x.RawMatrix().Cols)
+	xTrain := make([][]*mat.Dense, x.RawMatrix().Rows)
 	for i := range xTrain {
 		xTrain[i] = make([]*mat.Dense, 1)
-		xTrain[i][0] = mat.NewDense(28, 28, mat.Col(nil, i, x))
+		xTrain[i][0] = mat.NewDense(28, 28, x.RawRowView(i))
 	}
-	xTest := make([][]*mat.Dense, v.RawMatrix().Cols)
+	xTest := make([][]*mat.Dense, v.RawMatrix().Rows)
 	for i := range xTest {
 		xTest[i] = make([]*mat.Dense, 1)
-		xTest[i][0] = mat.NewDense(28, 28, mat.Col(nil, i, v))
+		xTest[i][0] = mat.NewDense(28, 28, v.RawRowView(i))
 	}
 	yTrain := LoadDataFromFile("../../dataset/mnist/train_label_shuffled.csv")
 	yTest := LoadDataFromFile("../../dataset/mnist/test_label.csv")
@@ -51,7 +51,7 @@ func main() {
 	neural.AddMaxPooling2DLayer(2, 2)
 	neural.AddConv2DLayer(32, 3, 1)
 	neural.AddMaxPooling2DLayer(2, 2)
-	neural.AddDenseLayer([]int{128, yTrain.RawMatrix().Rows})
+	neural.AddDenseLayer([]int{128, yTrain.RawMatrix().Cols})
 
 	// optimizer to train the model
 	model := neural.NewTrainer(cnn.TrainerConfig{

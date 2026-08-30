@@ -11,8 +11,8 @@ type NeuralNetwork interface {
 
 type NeuralModel interface {
 	// performs model training using the xTrain and yTrain matrices.
-	// both matrices have shape (nFeatures, nSamples), where each row
-	// corresponds to a feature and each column corresponds to a training sample.
+	// both matrices have shape (nSamples, nFeatures), where each row
+	// corresponds to a training sample and each column corresponds to a feature.
 	Fit(xTrain *mat.Dense, yTrain *mat.Dense, options ...func(*fitConfig)) []float64
 	Predict(x *mat.Dense) *mat.Dense
 	Evaluate(x *mat.Dense, y *mat.Dense) float64

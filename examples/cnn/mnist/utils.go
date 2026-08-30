@@ -28,9 +28,9 @@ func LoadDataFromFile(path string) *mat.Dense {
 		log.Println("error reading features from file:", err.Error())
 	}
 
-	m := mat.NewDense(len(lines[0]), len(lines), nil)
-	for j, line := range lines {
-		for i, col := range line {
+	m := mat.NewDense(len(lines), len(lines[0]), nil)
+	for i, line := range lines {
+		for j, col := range line {
 			value, _ := strconv.ParseFloat(col, 64)
 			m.Set(i, j, value)
 		}
@@ -44,10 +44,10 @@ func PredictFromImage(model cnn.CNNModel, path string) (int, float64) {
 	yPred := model.Predict(LoadFromImage(path))
 
 	fmt.Println("prediction from image:")
-	fmt.Println(mat.Formatted(yPred))
-	idx := floats.MaxIdx(mat.Col(nil, 0, yPred))
+	fmt.Println(mat.Formatted(yPred.T()))
+	idx := floats.MaxIdx(yPred.RawRowView(0))
 
-	return idx, math.Floor(yPred.At(idx, 0)*1000.0) / 10.0
+	return idx, math.Floor(yPred.At(0, idx)*1000.0) / 10.0
 }
 
 func LoadFromImage(path string) [][]*mat.Dense {

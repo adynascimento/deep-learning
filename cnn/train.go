@@ -129,8 +129,8 @@ func (cm *cnnModel) BackwardPropagation(Z, A map[string]*mat.Dense, D map[string
 
 // performs model training using the xTrain and yTrain datasets.
 // xTrain is a 4D tensor with shape (nTraining, nChannels, hIn, wIn).
-// yTrain is a matrix with shape (nFeatures, nSamples), where each row
-// corresponds to a feature and each column corresponds to a training sample.
+// yTrain is a matrix with shape (nSamples, nFeatures), where each row
+// corresponds to a training sample and each column corresponds to a feature.
 func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...func(*fitConfig)) []float64 {
 	nSamples := len(xTrain)
 
@@ -186,7 +186,7 @@ func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...fun
 				yBatch = ngo.GatherSamples(yTrain, batchIndices).(*mat.Dense)
 			} else {
 				xBatch = xTrain[startIdx:endIdx]
-				yBatch = yTrain.Slice(0, yTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)
+				yBatch = yTrain.Slice(startIdx, endIdx, 0, yTrain.RawMatrix().Cols).(*mat.Dense)
 			}
 
 			// forward propagation
@@ -227,32 +227,34 @@ func (cm *cnnModel) Evaluate(x [][]*mat.Dense, y *mat.Dense) float64 {
 	switch cm.Mode {
 	case nncore.ModeRegression:
 		// mean squared error
-		metric = mat.Sum(ngo.Square(ngo.Sub(y, yPred))) / float64(y.RawMatrix().Cols)
+		metric = mat.Sum(ngo.Square(ngo.Sub(y, yPred))) / float64(y.RawMatrix().Rows)
 
 	case nncore.ModeMultiClass:
 		// accuracy
-		for j := 0; j < y.RawMatrix().Cols; j++ {
-			trueClass := floats.MaxIdx(mat.Col(nil, j, y))
-			predClass := floats.MaxIdx(mat.Col(nil, j, yPred))
+		for i := 0; i < y.RawMatrix().Rows; i++ {
+			trueClass := floats.MaxIdx(y.RawRowView(i))
+			predClass := floats.MaxIdx(yPred.RawRowView(i))
 			if trueClass == predClass {
 				metric++
 			}
 		}
-		metric = (metric / float64(y.RawMatrix().Cols))
+		metric = (metric / float64(y.RawMatrix().Rows))
 
 	case nncore.ModeMultiLabel:
 		// hamming accuracy
-		for j := 0; j < y.RawMatrix().Cols; j++ {
+		for i := 0; i < y.RawMatrix().Rows; i++ {
+			predRow := yPred.RawRowView(i)
+
 			correctLabels := 0.0
-			for i, pred := range mat.Col(nil, j, yPred) {
+			for j, pred := range predRow {
 				// round considers the threshold 0.5
 				if y.At(i, j) == math.Round(pred) {
 					correctLabels++
 				}
 			}
-			metric += correctLabels / float64(len(mat.Col(nil, j, yPred)))
+			metric += correctLabels / float64(len(predRow))
 		}
-		metric = (metric / float64(y.RawMatrix().Cols))
+		metric = (metric / float64(y.RawMatrix().Rows))
 	}
 
 	return metric

@@ -17,8 +17,8 @@ type CNN interface {
 type CNNModel interface {
 	// performs model training using the xTrain and yTrain datasets.
 	// xTrain is a 4D tensor with shape (nTraining, nChannels, hIn, wIn).
-	// yTrain is a matrix with shape (nFeatures, nSamples), where each row
-	// corresponds to a feature and each column corresponds to a training sample.
+	// yTrain is a matrix with shape (nSamples, nFeatures), where each row
+	// corresponds to a training sample and each column corresponds to a feature.
 	Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...func(*fitConfig)) []float64
 	Predict(x [][]*mat.Dense) *mat.Dense
 	Evaluate(x [][]*mat.Dense, y *mat.Dense) float64

@@ -22,19 +22,14 @@ func (fl *flatten) ForwardPropagation(x [][]*mat.Dense) *mat.Dense {
 	// store the input shape
 	fl.Shape = []int{nTraining, nFilters, hOut, wOut}
 
-	result := mat.NewDense(nFilters*hOut*wOut, nTraining, nil)
-	resRaw := result.RawMatrix()
+	result := mat.NewDense(nTraining, nFilters*hOut*wOut, nil)
 	for i := 0; i < nTraining; i++ {
 		feature := 0
 		for j := 0; j < nFilters; j++ {
-			// underlying flattened data
+			// copy the flattened feature map into row i of the output matrix
 			src := x[i][j].RawMatrix().Data
-
-			// copy the flattened feature map into column i of the output matrix
-			for _, v := range src {
-				resRaw.Data[feature*resRaw.Stride+i] = v
-				feature++
-			}
+			copy(result.RawRowView(i)[feature:], src)
+			feature += len(src)
 		}
 	}
 
@@ -42,7 +37,7 @@ func (fl *flatten) ForwardPropagation(x [][]*mat.Dense) *mat.Dense {
 }
 
 // backward propagation step: flatten operation
-// gradient dA with shape (nFilters*hOut*wOut, nTraining)
+// gradient dA with shape (nTraining, nFilters*hOut*wOut)
 func (fl *flatten) BackwardPropagation(dA *mat.Dense) [][]*mat.Dense {
 	nTraining := fl.Shape[0]
 	nFilters := fl.Shape[1]
@@ -59,15 +54,13 @@ func (fl *flatten) BackwardPropagation(dA *mat.Dense) [][]*mat.Dense {
 	}
 
 	// reshape the gradient back to the original shape (nTraining, nFilters, hOut, wOut)
-	dARaw := dA.RawMatrix()
 	for i := 0; i < nTraining; i++ {
 		feature := 0
+		row := dA.RawRowView(i)
 		for j := 0; j < nFilters; j++ {
 			dst := x[i][j].RawMatrix().Data
-			for k := range dst {
-				dst[k] = dARaw.Data[feature*dARaw.Stride+i]
-				feature++
-			}
+			copy(dst, row[feature:feature+len(dst)])
+			feature += len(dst)
 		}
 	}
 
