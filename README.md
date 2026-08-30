@@ -236,8 +236,8 @@ import (
 func main() {
 	// define search space
 	space := mlp.SearchSpace{
-		InputDim:          xTrain.RawMatrix().Rows,
-		OutputDim:         yTrain.RawMatrix().Rows,
+		InputDim:          xTrain.RawMatrix().Cols,
+		OutputDim:         yTrain.RawMatrix().Cols,
 		NLayersRange:      mlp.IntRange{Min: 3, Max: 5},         // minimum and maximum number of layers
 		NHiddenRange:      mlp.IntRange{Min: 50, Max: 100},      // minimum and maximum number of hidden units per layers
 		LearningRateRange: mlp.FloatRange{Min: 1e-4, Max: 1e-2}, // minimum and maximum of learning rate

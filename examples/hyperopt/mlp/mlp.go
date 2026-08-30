@@ -12,21 +12,21 @@ import (
 
 func main() {
 	// training data
-	xTrain := LoadDataFromFile("../dataset/mnist/train_x_shuffled.csv")
-	yTrain := LoadDataFromFile("../dataset/mnist/train_label_shuffled.csv")
+	xTrain := LoadDataFromFile("../../dataset/mnist/train_x_shuffled.csv")
+	yTrain := LoadDataFromFile("../../dataset/mnist/train_label_shuffled.csv")
 
 	// testing data
-	xTest := LoadDataFromFile("../dataset/mnist/test_x.csv")
-	yTest := LoadDataFromFile("../dataset/mnist/test_label.csv")
+	xTest := LoadDataFromFile("../../dataset/mnist/test_x.csv")
+	yTest := LoadDataFromFile("../../dataset/mnist/test_label.csv")
 
 	applyNormalization := func(_, _ int, v float64) float64 { return v / 255.0 }
 	xTrain = ngo.Apply(applyNormalization, xTrain)
 	xTest = ngo.Apply(applyNormalization, xTest)
 
 	model := func(trialID int, params mlp.Params) float64 {
-		nnStructure := []int{xTrain.RawMatrix().Rows}              // input dimension
+		nnStructure := []int{xTrain.RawMatrix().Cols}              // input dimension
 		nnStructure = append(nnStructure, params.HiddenLayers...)  // hidden layers
-		nnStructure = append(nnStructure, yTrain.RawMatrix().Rows) // output dimension
+		nnStructure = append(nnStructure, yTrain.RawMatrix().Cols) // output dimension
 
 		// neural network model
 		neural := mlp.NewNeuralNetwork(mlp.NeuralConfig{
