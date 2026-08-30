@@ -14,13 +14,13 @@ const (
 	OverColumns directionType = "columns"
 )
 
-// split dataset into two matrix (training and testing)
+// split dataset into two matrices (training and testing)
 func Split(a *mat.Dense, frac float64) (*mat.Dense, *mat.Dense) {
 	nRows, nCols := a.Dims()
 
-	jdx := int(frac * float64(nCols))
-	m1 := a.Slice(0, nRows, 0, jdx)
-	m2 := a.Slice(0, nRows, jdx, nCols)
+	idx := int(frac * float64(nRows))
+	m1 := a.Slice(0, idx, 0, nCols)
+	m2 := a.Slice(idx, nRows, 0, nCols)
 
 	return m1.(*mat.Dense), m2.(*mat.Dense)
 }
@@ -65,11 +65,14 @@ func AddMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
 	return m
 }
 
-// multiply "a" matrix with "b" column vector row-wise
+// multiply "a" matrix with "b" column vector column-wise
 func MulMatrixVector(a, b *mat.Dense) *mat.Dense {
 	m := mat.DenseCopyOf(a)
-	for i := range m.RawMatrix().Rows {
-		floats.Scale(b.At(i, 0), m.RawRowView(i))
+	for i := 0; i < m.RawMatrix().Rows; i++ {
+		row := m.RawRowView(i)
+		for j := range row {
+			row[j] *= b.At(j, 0)
+		}
 	}
 
 	return m
