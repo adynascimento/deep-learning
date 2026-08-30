@@ -34,20 +34,17 @@ func Sum(a *mat.Dense, direction directionType) *mat.Dense {
 	case OverRows:
 		for j := 0; j < a.RawMatrix().Cols; j++ {
 			var sum float64
-
-			col := mat.Col(nil, j, a)
-			for _, v := range col {
+			for _, v := range mat.Col(nil, j, a) {
 				sum = sum + v
 			}
 			vals = append(vals, sum)
 		}
 		m = mat.NewDense(1, a.RawMatrix().Cols, vals)
+
 	case OverColumns:
 		for i := 0; i < a.RawMatrix().Rows; i++ {
 			var sum float64
-
-			row := mat.Row(nil, i, a)
-			for _, v := range row {
+			for _, v := range a.RawRowView(i) {
 				sum = sum + v
 			}
 			vals = append(vals, sum)
@@ -58,11 +55,11 @@ func Sum(a *mat.Dense, direction directionType) *mat.Dense {
 	return m
 }
 
-// add "a" matrix with "b" column vector row-wise
+// add "a" matrix with "b" row vector row-wise
 func AddMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
 	m := mat.DenseCopyOf(a)
 	for i := range m.RawMatrix().Rows {
-		floats.AddConst(b.At(i, 0), m.RawRowView(i))
+		floats.Add(m.RawRowView(i), b.RawRowView(0))
 	}
 
 	return m
@@ -78,11 +75,11 @@ func MulMatrixVector(a, b *mat.Dense) *mat.Dense {
 	return m
 }
 
-// division "a" matrix with "b" row vector column-wise
+// division "a" matrix with "b" column vector row-wise
 func DivMatrixVector(a *mat.Dense, b *mat.Dense) *mat.Dense {
 	m := mat.DenseCopyOf(a)
 	for i := range m.RawMatrix().Rows {
-		floats.Div(m.RawRowView(i), b.RawMatrix().Data)
+		floats.Scale(1.0/b.At(i, 0), m.RawRowView(i))
 	}
 
 	return m
@@ -278,16 +275,9 @@ func Multiply(a, b mat.Matrix) *mat.Dense {
 func GatherSamples(x any, indices []int) any {
 	switch x := x.(type) {
 	case *mat.Dense:
-		xRaw := x.RawMatrix()
-		m := mat.NewDense(xRaw.Rows, len(indices), nil)
-		mRaw := m.RawMatrix()
-		for row := 0; row < xRaw.Rows; row++ {
-			xRowOffset := row * xRaw.Stride
-			mRowOffset := row * mRaw.Stride
-
-			for newCol, oldCol := range indices {
-				mRaw.Data[mRowOffset+newCol] = xRaw.Data[xRowOffset+oldCol]
-			}
+		m := mat.NewDense(len(indices), x.RawMatrix().Cols, nil)
+		for newRow, oldRow := range indices {
+			copy(m.RawRowView(newRow), x.RawRowView(oldRow))
 		}
 		return m
 

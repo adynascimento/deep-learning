@@ -14,12 +14,12 @@ import (
 func main() {
 	// training data
 	applySin := func(_, _ int, v float64) float64 { return math.Sin(15. * v) }
-	xTrain := mat.NewDense(1, 301, ngo.Linspace(0., 1., 301))
+	xTrain := mat.NewDense(301, 1, ngo.Linspace(0., 1., 301))
 	yTrain := ngo.Apply(applySin, xTrain)
 
 	// input and output features
-	inputDim := xTrain.RawMatrix().Rows
-	outputDim := yTrain.RawMatrix().Rows
+	inputDim := xTrain.RawMatrix().Cols
+	outputDim := yTrain.RawMatrix().Cols
 
 	// neural network model
 	neural := mlp.NewNeuralNetwork(mlp.NeuralConfig{

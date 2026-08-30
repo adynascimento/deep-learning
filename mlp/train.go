@@ -16,10 +16,10 @@ import (
 )
 
 // performs model training using the xTrain and yTrain matrices.
-// both matrices have shape (nFeatures, nSamples), where each row
-// corresponds to a feature and each column corresponds to a training sample.
+// both matrices have shape (nSamples, nFeatures), where each row
+// corresponds to a training sample and each column corresponds to a feature.
 func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig)) []float64 {
-	nSamples := xTrain.RawMatrix().Cols
+	nSamples := xTrain.RawMatrix().Rows
 
 	// default values
 	config := fitConfig{
@@ -36,7 +36,7 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig
 	// keep track of the loss
 	losses := []float64{}
 
-	// create a fixed index slice to map the columns
+	// create a fixed index slice for shuffling samples
 	indices := make([]int, nSamples)
 
 	// loop
@@ -71,8 +71,8 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig
 				xBatch = ngo.GatherSamples(xTrain, batchIndices).(*mat.Dense)
 				yBatch = ngo.GatherSamples(yTrain, batchIndices).(*mat.Dense)
 			} else {
-				xBatch = xTrain.Slice(0, xTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)
-				yBatch = yTrain.Slice(0, yTrain.RawMatrix().Rows, startIdx, endIdx).(*mat.Dense)
+				xBatch = xTrain.Slice(startIdx, endIdx, 0, xTrain.RawMatrix().Cols).(*mat.Dense)
+				yBatch = yTrain.Slice(startIdx, endIdx, 0, yTrain.RawMatrix().Cols).(*mat.Dense)
 			}
 
 			// forward propagation
@@ -120,32 +120,34 @@ func (nm *neuralModel) Evaluate(x, y *mat.Dense) float64 {
 	switch nm.Mode {
 	case nncore.ModeRegression:
 		// mean squared error
-		metric = mat.Sum(ngo.Square(ngo.Sub(y, yPred))) / float64(y.RawMatrix().Cols)
+		metric = mat.Sum(ngo.Square(ngo.Sub(y, yPred))) / float64(y.RawMatrix().Rows)
 
 	case nncore.ModeMultiClass:
 		// accuracy
-		for j := 0; j < y.RawMatrix().Cols; j++ {
-			trueClass := floats.MaxIdx(mat.Col(nil, j, y))
-			predClass := floats.MaxIdx(mat.Col(nil, j, yPred))
+		for i := 0; i < y.RawMatrix().Rows; i++ {
+			trueClass := floats.MaxIdx(y.RawRowView(i))
+			predClass := floats.MaxIdx(yPred.RawRowView(i))
 			if trueClass == predClass {
 				metric++
 			}
 		}
-		metric = (metric / float64(y.RawMatrix().Cols))
+		metric = (metric / float64(y.RawMatrix().Rows))
 
 	case nncore.ModeMultiLabel:
 		// hamming accuracy
-		for j := 0; j < y.RawMatrix().Cols; j++ {
+		for i := 0; i < y.RawMatrix().Rows; i++ {
+			predRow := yPred.RawRowView(i)
+
 			correctLabels := 0.0
-			for i, pred := range mat.Col(nil, j, yPred) {
+			for j, pred := range predRow {
 				// round considers the threshold 0.5
 				if y.At(i, j) == math.Round(pred) {
 					correctLabels++
 				}
 			}
-			metric += correctLabels / float64(len(mat.Col(nil, j, yPred)))
+			metric += correctLabels / float64(len(predRow))
 		}
-		metric = (metric / float64(y.RawMatrix().Cols))
+		metric = (metric / float64(y.RawMatrix().Rows))
 	}
 
 	return metric

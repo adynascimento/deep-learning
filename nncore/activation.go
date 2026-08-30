@@ -203,7 +203,7 @@ func Linear(a *mat.Dense) *mat.Dense {
 // applies softmax function for output layer
 func Softmax(a *mat.Dense) *mat.Dense {
 	exp := ngo.Apply(func(_, _ int, v float64) float64 { return math.Exp(v) }, a)
-	sum := ngo.Sum(exp, ngo.OverRows)
+	sum := ngo.Sum(exp, ngo.OverColumns)
 
 	return ngo.DivMatrixVector(exp, sum)
 }

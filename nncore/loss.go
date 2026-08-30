@@ -12,7 +12,7 @@ type LossFunction func(*mat.Dense, *mat.Dense, map[string]*mat.Dense, float64) f
 
 // computing the mean squared error loss function
 func MeanSquaredError(yHat, y *mat.Dense, parameters map[string]*mat.Dense, lambd float64) float64 {
-	m := yHat.RawMatrix().Cols
+	m := yHat.RawMatrix().Rows
 	loss := mat.Sum(ngo.Square(ngo.Sub(yHat, y)))
 
 	// l2 regularization loss
@@ -28,7 +28,7 @@ func MeanSquaredError(yHat, y *mat.Dense, parameters map[string]*mat.Dense, lamb
 
 // computing the cross entropy loss function
 func CrossEntropy(y_hat, y *mat.Dense, parameters map[string]*mat.Dense, lambd float64) float64 {
-	m := y_hat.RawMatrix().Cols
+	m := y_hat.RawMatrix().Rows
 
 	epsilon := 1e-07
 	applyLog := func(_, _ int, v float64) float64 { return math.Log(v + epsilon) }
@@ -47,7 +47,7 @@ func CrossEntropy(y_hat, y *mat.Dense, parameters map[string]*mat.Dense, lambd f
 
 // computing the binary cross entropy loss function
 func BinaryCrossEntropy(y_hat, y *mat.Dense, parameters map[string]*mat.Dense, lambd float64) float64 {
-	m := y_hat.RawMatrix().Cols
+	m := y_hat.RawMatrix().Rows
 
 	epsilon := 1e-07
 	applyLog := func(_, _ int, v float64) float64 { return math.Log(v + epsilon) }
