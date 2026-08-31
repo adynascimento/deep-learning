@@ -26,16 +26,16 @@ func NewStandardScaler() StandardScaler {
 // performs a standardize features by removing the mean and
 // scaling to unit variance on the matrix of the input data
 // which is represented as an rows X cols matrix a where each
-// row is a variable and each column is an observation.
-// matrix shape (nFeatures, nSamples)
+// row is an observation and each column is a variable.
+// matrix shape (nSamples, nFeatures)
 func (s *standardScaler) Fit(m mat.Matrix) {
 	data := mat.DenseCopyOf(m)
-	rows, _ := data.Dims()
+	_, cols := data.Dims()
 
-	s.mean = make([]float64, rows)
-	s.stdDev = make([]float64, rows)
-	for i := 0; i < rows; i++ {
-		s.mean[i], s.stdDev[i] = stat.PopMeanStdDev(mat.Row(nil, i, data), nil)
+	s.mean = make([]float64, cols)
+	s.stdDev = make([]float64, cols)
+	for j := 0; j < cols; j++ {
+		s.mean[j], s.stdDev[j] = stat.PopMeanStdDev(mat.Col(nil, j, data), nil)
 	}
 }
 
@@ -45,10 +45,10 @@ func (s *standardScaler) Transform(m mat.Matrix) *mat.Dense {
 	rows, cols := data.Dims()
 
 	standardized := mat.NewDense(rows, cols, nil)
-	for i := 0; i < rows; i++ {
-		if s.stdDev[i] != 0 {
-			for j := 0; j < cols; j++ {
-				standardized.Set(i, j, (data.At(i, j)-s.mean[i])/s.stdDev[i])
+	for j := 0; j < cols; j++ {
+		if s.stdDev[j] != 0 {
+			for i := 0; i < rows; i++ {
+				standardized.Set(i, j, (data.At(i, j)-s.mean[j])/s.stdDev[j])
 			}
 		}
 	}
@@ -69,21 +69,21 @@ func (s *standardScaler) InverseTransform(m mat.Matrix) *mat.Dense {
 	rows, cols := data.Dims()
 
 	inversed := mat.NewDense(rows, cols, nil)
-	for i := 0; i < rows; i++ {
-		for j := 0; j < cols; j++ {
-			inversed.Set(i, j, (data.At(i, j)*s.stdDev[i])+s.mean[i])
+	for j := 0; j < cols; j++ {
+		for i := 0; i < rows; i++ {
+			inversed.Set(i, j, data.At(i, j)*s.stdDev[j]+s.mean[j])
 		}
 	}
 
 	return inversed
 }
 
-// get the sample mean
+// get the mean of each feature
 func (s *standardScaler) GetMean() []float64 {
 	return s.mean
 }
 
-// get the biased standard deviation
+// get the biased standard deviation of each feature
 func (s *standardScaler) GetStdDev() []float64 {
 	return s.stdDev
 }
