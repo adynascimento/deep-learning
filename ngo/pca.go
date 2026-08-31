@@ -91,8 +91,7 @@ func (p *pca) Transform(m mat.Matrix) *mat.Dense {
 	return MatMul(data, p.components.T())
 }
 
-// FitTransform is exactly equivalent to calling Fit()
-// followed by Transform()
+// FitTransform is exactly equivalent to calling Fit() followed by Transform()
 func (p *pca) FitTransform(m mat.Matrix) *mat.Dense {
 	p.Fit(m)
 	return p.Transform(m)
@@ -107,7 +106,7 @@ func (p *pca) InverseTransform(m mat.Matrix) *mat.Dense {
 	reconstructed := MatMul(mat.DenseCopyOf(m), p.components)
 	for i := 0; i < rows; i++ {
 		for j := 0; j < cols; j++ {
-			reconstructed.Set(i, j, reconstructed.At(i, j)+p.mean[i])
+			reconstructed.Set(i, j, reconstructed.At(i, j)+p.mean[j])
 		}
 	}
 
