@@ -22,8 +22,8 @@ func main() {
 	xTrain, xTest := ngo.Split(countMatrix, 0.75)
 	yTrain, yTest := ngo.Split(dataLabel, 0.75)
 
-	inputDim := xTrain.RawMatrix().Rows
-	outputDim := yTrain.RawMatrix().Rows
+	inputDim := xTrain.RawMatrix().Cols
+	outputDim := yTrain.RawMatrix().Cols
 
 	// neural network model
 	neural := mlp.NewNeuralNetwork(mlp.NeuralConfig{

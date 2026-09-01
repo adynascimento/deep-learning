@@ -207,6 +207,7 @@ func toNetwork(m model) CNNModel {
 		Iter:             m.DenseLayer.Optimizer.Iter,
 		L2Regularization: m.DenseLayer.L2Regularization,
 		Dropout:          m.DenseLayer.Dropout,
+		RNG:              nncore.NewRand(nil),
 	}
 	if err := denseLayer.UnmarshalParameters(m.DenseLayer.Parameters); err != nil {
 		log.Fatalln("error unmarshal dense parameters: ", err.Error())

@@ -124,6 +124,7 @@ func toNetwork(m model) NeuralModel {
 		Iter:             m.Dense.Optimizer.Iter,
 		L2Regularization: m.Dense.L2Regularization,
 		Dropout:          m.Dense.Dropout,
+		RNG:              nncore.NewRand(nil),
 	}
 	if err := denseLayer.UnmarshalParameters(m.Dense.Parameters); err != nil {
 		log.Fatalln("error unmarshal dense parameters: ", err.Error())

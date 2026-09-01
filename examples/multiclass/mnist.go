@@ -22,8 +22,8 @@ func main() {
 	xTest = ngo.Apply(applyNormalization, xTest)
 
 	// input and output features
-	inputDim := xTrain.RawMatrix().Rows
-	outputDim := yTrain.RawMatrix().Rows
+	inputDim := xTrain.RawMatrix().Cols
+	outputDim := yTrain.RawMatrix().Cols
 
 	// neural network model
 	neural := mlp.NewNeuralNetwork(mlp.NeuralConfig{
@@ -38,7 +38,8 @@ func main() {
 		LearningRate: 0.0075,               // learning rate
 		Epochs:       20},                  // number of iterations
 		mlp.WithBatchSize(32),
-		mlp.WithL2Regularization(1.40e-06))
+		mlp.WithL2Regularization(1.40e-06),
+	)
 	model.Summary()
 	model.Fit(xTrain, yTrain)
 

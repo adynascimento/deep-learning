@@ -17,23 +17,26 @@ func main() {
 	applyNormalization := func(_, _ int, v float64) float64 { return v / 255.0 }
 	xTrain = ngo.Apply(applyNormalization, xTrain)
 
-	labels := make([]float64, yTrain.RawMatrix().Cols)
-	for j := range yTrain.RawMatrix().Cols {
-		labels[j] = float64(floats.MaxIdx(mat.Col(nil, j, yTrain)))
+	labels := make([]float64, yTrain.RawMatrix().Rows)
+	for i := range labels {
+		labels[i] = float64(floats.MaxIdx(yTrain.RawRowView(i)))
 	}
 
 	nComponents := 50
 	pca := ngo.NewPCA(nComponents)
 	xTrainReduced := pca.FitTransform(xTrain)
+	variance := pca.GetExplainedVariance()
 
-	x := ngo.Linspace(0, float64(nComponents), len(pca.GetExplainedVariance()))
-	y := make([]float64, len(pca.GetExplainedVariance()))
-	floats.CumSum(y, pca.GetExplainedVariance())
+	x := ngo.Linspace(1, float64(nComponents), len(variance))
+	y := make([]float64, len(variance))
+	floats.CumSum(y, variance)
 
 	plt := plotter.NewPlot()
 	plt.FigSize(12, 11)
 
-	plt.Scatter(xTrainReduced.RawRowView(0), xTrainReduced.RawRowView(1), labels,
+	pc1 := mat.Col(nil, 0, xTrainReduced)
+	pc2 := mat.Col(nil, 1, xTrainReduced)
+	plt.Scatter(pc1, pc2, labels,
 		plotter.WithScatterColorMap(plotter.Tab10),
 		plotter.WithScatterColorbar(plotter.Vertical),
 	)
@@ -47,7 +50,7 @@ func main() {
 
 	plt = plotter.NewPlot()
 	plt.FigSize(12, 11)
-	
+
 	plt.Plot(x, y)
 	plt.Plot(x, ngo.Linspace(floats.Max(y), floats.Max(y), len(x)),
 		plotter.WithLineColor(plotter.Red),

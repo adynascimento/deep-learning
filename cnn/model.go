@@ -17,8 +17,8 @@ type CNN interface {
 type CNNModel interface {
 	// performs model training using the xTrain and yTrain datasets.
 	// xTrain is a 4D tensor with shape (nTraining, nChannels, hIn, wIn).
-	// yTrain is a matrix with shape (nFeatures, nSamples), where each row
-	// corresponds to a feature and each column corresponds to a training sample.
+	// yTrain is a matrix with shape (nSamples, nFeatures), where each row
+	// corresponds to a training sample and each column corresponds to a feature.
 	Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...func(*fitConfig)) []float64
 	Predict(x [][]*mat.Dense) *mat.Dense
 	Evaluate(x [][]*mat.Dense, y *mat.Dense) float64
@@ -57,12 +57,14 @@ type cnn struct {
 type cnnModel struct {
 	*cnn
 	*cnnForwardOutputs
-	NWorkers        int
-	WorkerGradients [][]gradients
-	LearningRate    float64
-	Epochs          int
-	BatchSize       int
-	Seed            *uint64
+	NWorkers         int
+	WorkerGradients  [][]gradients
+	LearningRate     float64
+	Epochs           int
+	BatchSize        int
+	L2Regularization float64
+	Dropout          float64
+	Seed             *uint64
 }
 
 type cnnForwardOutputs struct {
@@ -141,12 +143,33 @@ func (c *cnn) LastOutputShape() [3]int {
 }
 
 func (c *cnn) NewTrainer(config TrainerConfig, options ...func(*cnnModel)) CNNModel {
+	model := cnnModel{
+		cnn: c,
+		cnnForwardOutputs: &cnnForwardOutputs{
+			ConvOutputs: make(map[string][][]*mat.Dense),
+			PoolOutputs: make(map[string][]*poolCache),
+		},
+		LearningRate: config.LearningRate,
+		Epochs:       config.Epochs,
+		BatchSize:    32,
+	}
+
+	// apply additional options
+	for _, option := range options {
+		option(&model)
+	}
+
+	// initialize the random number generator
+	rng := nncore.NewRand(model.Seed)
+
 	// add convolutional layer
 	for _, convConfig := range c.ConvConfigs {
 		convLayer := newConvLayer(convLayerConfig{
-			convConfig: convConfig,
-			Activation: c.Activation,
-			Optimizer:  config.Optimizer,
+			convConfig:       convConfig,
+			Activation:       c.Activation,
+			Optimizer:        config.Optimizer,
+			L2Regularization: model.L2Regularization,
+			RNG:              rng.Spawn(),
 		})
 		c.ConvLayers = append(c.ConvLayers, convLayer)
 	}
@@ -160,30 +183,15 @@ func (c *cnn) NewTrainer(config TrainerConfig, options ...func(*cnnModel)) CNNMo
 		Activation:       c.Activation,
 		OutputActivation: c.OutputActivation,
 		Optimizer:        config.Optimizer,
+		L2Regularization: model.L2Regularization,
+		Dropout:          model.Dropout,
+		RNG:              rng.Spawn(),
 	})
 
 	// each worker accumulates its own local gradients in the backward propagation
 	// for a subset of the training samples before the final gradient reduction
-	nWorkers := runtime.GOMAXPROCS(0)
-	workerGradients := newWorkerGradients(c.ConvLayers, nWorkers)
-
-	model := cnnModel{
-		cnn: c,
-		cnnForwardOutputs: &cnnForwardOutputs{
-			ConvOutputs: make(map[string][][]*mat.Dense),
-			PoolOutputs: make(map[string][]*poolCache),
-		},
-		NWorkers:        nWorkers,
-		WorkerGradients: workerGradients,
-		LearningRate:    config.LearningRate,
-		Epochs:          config.Epochs,
-		BatchSize:       32,
-	}
-
-	// apply additional options
-	for _, option := range options {
-		option(&model)
-	}
+	model.NWorkers = runtime.GOMAXPROCS(0)
+	model.WorkerGradients = newWorkerGradients(c.ConvLayers, model.NWorkers)
 
 	return &model
 }
@@ -210,16 +218,13 @@ func WithBatchSize(batchSize int) func(*cnnModel) {
 
 func WithL2Regularization(lambd float64) func(*cnnModel) {
 	return func(nm *cnnModel) {
-		for _, layer := range nm.ConvLayers {
-			layer.L2Regularization = lambd
-		}
-		nm.DenseLayer.L2Regularization = lambd
+		nm.L2Regularization = lambd
 	}
 }
 
 func WithDropout(dropout float64) func(*cnnModel) {
 	return func(nm *cnnModel) {
-		nm.DenseLayer.Dropout = dropout
+		nm.Dropout = dropout
 	}
 }
 

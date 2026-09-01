@@ -48,8 +48,10 @@ type convConfig struct {
 
 type convLayerConfig struct {
 	convConfig
-	Activation nncore.Activation
-	Optimizer  nncore.OptimizerType
+	Activation       nncore.Activation
+	Optimizer        nncore.OptimizerType
+	L2Regularization float64
+	RNG              *nncore.RNG
 }
 
 func newConvLayer(config convLayerConfig) *convLayer {
@@ -57,7 +59,7 @@ func newConvLayer(config convLayerConfig) *convLayer {
 
 	// initialize convolutional neural network
 	// filters with shape (nFilters, nChannels, filterSize, filterSize)
-	filters := initializeConvParameters(config.NFilters, nChannels, config.FilterSize, config.Activation)
+	filters := initializeConvParameters(config.NFilters, nChannels, config.FilterSize, config.Activation, config.RNG)
 
 	// K is the number of weights per input channel
 	K := config.FilterSize * config.FilterSize
@@ -91,18 +93,19 @@ func newConvLayer(config convLayerConfig) *convLayer {
 			B:    mat.NewDense(config.NFilters, 1, nil),
 			WBig: wBig,
 		},
-		Activation: config.Activation,
-		Gradients:  gradients,
-		Optimizer:  optimizer,
-		NFilters:   config.NFilters,
-		NChannels:  nChannels,
-		FilterSize: config.FilterSize,
-		Stride:     config.Stride,
-		Iter:       1,
+		Activation:       config.Activation,
+		Gradients:        gradients,
+		Optimizer:        optimizer,
+		NFilters:         config.NFilters,
+		NChannels:        nChannels,
+		FilterSize:       config.FilterSize,
+		Stride:           config.Stride,
+		Iter:             1,
+		L2Regularization: config.L2Regularization,
 	}
 }
 
-func initializeConvParameters(nFilters, nChannels, filterSize int, activation nncore.Activation) [][]*mat.Dense {
+func initializeConvParameters(nFilters, nChannels, filterSize int, activation nncore.Activation, rng *nncore.RNG) [][]*mat.Dense {
 	fanIn := nChannels * filterSize * filterSize
 	fanOut := nFilters * filterSize * filterSize
 
@@ -120,7 +123,7 @@ func initializeConvParameters(nFilters, nChannels, filterSize int, activation nn
 	for i := range filters {
 		filters[i] = make([]*mat.Dense, nChannels)
 		for j := range filters[i] {
-			filters[i][j] = ngo.Scale(scalar, ngo.Randn(filterSize, filterSize))
+			filters[i][j] = ngo.Scale(scalar, rng.Randn(filterSize, filterSize))
 		}
 	}
 

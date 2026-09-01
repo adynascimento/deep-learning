@@ -19,15 +19,15 @@ func main() {
 	x = ngo.Apply(applyNormalization, x)
 	v = ngo.Apply(applyNormalization, v)
 
-	xTrain := make([][]*mat.Dense, x.RawMatrix().Cols)
+	xTrain := make([][]*mat.Dense, x.RawMatrix().Rows)
 	for i := range xTrain {
 		xTrain[i] = make([]*mat.Dense, 1)
-		xTrain[i][0] = mat.NewDense(28, 28, mat.Col(nil, i, x))
+		xTrain[i][0] = mat.NewDense(28, 28, x.RawRowView(i))
 	}
-	xTest := make([][]*mat.Dense, v.RawMatrix().Cols)
+	xTest := make([][]*mat.Dense, v.RawMatrix().Rows)
 	for i := range xTest {
 		xTest[i] = make([]*mat.Dense, 1)
-		xTest[i][0] = mat.NewDense(28, 28, mat.Col(nil, i, v))
+		xTest[i][0] = mat.NewDense(28, 28, v.RawRowView(i))
 	}
 	yTrain := LoadDataFromFile("../../dataset/mnist/train_label_shuffled.csv")
 	yTest := LoadDataFromFile("../../dataset/mnist/test_label.csv")
@@ -50,7 +50,7 @@ func main() {
 
 		// dense layer
 		denseStructure := append([]int{}, params.HiddenLayers...)        // hidden layers
-		denseStructure = append(denseStructure, yTrain.RawMatrix().Rows) // output dimension
+		denseStructure = append(denseStructure, yTrain.RawMatrix().Cols) // output dimension
 		neural.AddDenseLayer(denseStructure)
 
 		// optimizer to train the model

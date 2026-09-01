@@ -21,9 +21,9 @@ func LoadDataFromFile(path string) *mat.Dense {
 		log.Println("error reading features from file:", err.Error())
 	}
 
-	m := mat.NewDense(len(lines[0]), len(lines), nil)
-	for j, line := range lines {
-		for i, col := range line {
+	m := mat.NewDense(len(lines), len(lines[0]), nil)
+	for i, line := range lines {
+		for j, col := range line {
 			value, _ := strconv.ParseFloat(col, 64)
 			m.Set(i, j, value)
 		}

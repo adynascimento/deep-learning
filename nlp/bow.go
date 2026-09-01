@@ -80,13 +80,13 @@ func (v *countVectorizer) Fit(texts ...string) {
 
 // transforms the given documents into the frequency with which the associated term occurs
 func (v *countVectorizer) Transform(texts ...string) *mat.Dense {
-	m := mat.NewDense(len(v.wordIndex), len(texts), nil)
+	m := mat.NewDense(len(texts), len(v.wordIndex), nil)
 
 	for j, text := range texts {
 		words := v.Tokenize(text)
 		for _, word := range words {
 			if i, exists := v.wordIndex[word]; exists {
-				m.Set(i, j, m.At(i, j)+1)
+				m.Set(j, i, m.At(j, i)+1)
 			}
 		}
 	}

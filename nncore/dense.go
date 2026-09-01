@@ -15,6 +15,9 @@ type DenseConfig struct {
 	Activation       Activation
 	OutputActivation OutputActivation
 	Optimizer        OptimizerType
+	L2Regularization float64
+	Dropout          float64
+	RNG              *RNG
 }
 
 type Dense struct {
@@ -25,11 +28,12 @@ type Dense struct {
 	Iter             float64
 	L2Regularization float64
 	Dropout          float64
+	RNG              *RNG
 }
 
 func NewDense(config DenseConfig) *Dense {
 	// initializing the model parameters
-	parameters := initializeDenseParameters(config.NNStructure, config.Activation)
+	parameters := initializeDenseParameters(config.NNStructure, config.Activation, config.RNG)
 
 	// choice of optimization algorithm
 	optimizer := NewOptimizer(config.Optimizer)
@@ -40,11 +44,14 @@ func NewDense(config DenseConfig) *Dense {
 		Optimizer:        optimizer,
 		Parameters:       parameters,
 		Iter:             1,
+		L2Regularization: config.L2Regularization,
+		Dropout:          config.Dropout,
+		RNG:              config.RNG.Spawn(),
 	}
 }
 
 // initializing the model parameters
-func initializeDenseParameters(nnStructure []int, activation Activation) map[string]*mat.Dense {
+func initializeDenseParameters(nnStructure []int, activation Activation, rng *RNG) map[string]*mat.Dense {
 	parameters := make(map[string]*mat.Dense) // map containing the parameters
 	L := len(nnStructure) - 1                 // number of layers
 
@@ -64,8 +71,8 @@ func initializeDenseParameters(nnStructure []int, activation Activation) map[str
 			}
 		}
 
-		parameters["W"+strconv.Itoa(l+1)] = ngo.Scale(scalar, ngo.Randn(nnStructure[l+1], nnStructure[l]))
-		parameters["b"+strconv.Itoa(l+1)] = mat.NewDense(nnStructure[l+1], 1, nil)
+		parameters["W"+strconv.Itoa(l+1)] = ngo.Scale(scalar, rng.Randn(fanIn, fanOut))
+		parameters["b"+strconv.Itoa(l+1)] = mat.NewDense(1, fanOut, nil)
 	}
 
 	return parameters
@@ -83,17 +90,18 @@ func (dn *Dense) ForwardPropagation(x *mat.Dense, training bool) (*mat.Dense, ma
 		W := dn.Parameters["W"+strconv.Itoa(l+1)] // weights W
 		b := dn.Parameters["b"+strconv.Itoa(l+1)] // biases b
 
-		Z[strconv.Itoa(l+1)] = ngo.AddMatrixVector(ngo.MatMul(W, A[strconv.Itoa(l)]), b) // compute the linear operation
+		Z[strconv.Itoa(l+1)] = ngo.AddMatrixVector(ngo.MatMul(A[strconv.Itoa(l)], W), b) // compute the linear operation
 		A[strconv.Itoa(l+1)] = dn.Activation.Function(Z[strconv.Itoa(l+1)])              // compute the non linear operation
 
 		// apply dropout
 		if training && dn.Dropout > 0 {
-			D[strconv.Itoa(l+1)] = DropoutMask(A[strconv.Itoa(l+1)], dn.Dropout)
+			D[strconv.Itoa(l+1)] = DropoutMask(A[strconv.Itoa(l+1)], dn.Dropout, dn.RNG)
 			ApplyDropoutMask(A[strconv.Itoa(l+1)], D[strconv.Itoa(l+1)], dn.Dropout)
 		}
 	}
+
 	// for output layer
-	Z[strconv.Itoa(L)] = ngo.AddMatrixVector(ngo.MatMul(dn.Parameters["W"+strconv.Itoa(L)], A[strconv.Itoa(L-1)]), dn.Parameters["b"+strconv.Itoa(L)])
+	Z[strconv.Itoa(L)] = ngo.AddMatrixVector(ngo.MatMul(A[strconv.Itoa(L-1)], dn.Parameters["W"+strconv.Itoa(L)]), dn.Parameters["b"+strconv.Itoa(L)])
 	A[strconv.Itoa(L)] = dn.OutputActivation.Function(Z[strconv.Itoa(L)])
 
 	// prediction
@@ -104,7 +112,7 @@ func (dn *Dense) ForwardPropagation(x *mat.Dense, training bool) (*mat.Dense, ma
 
 // backward propagation step
 func (dn *Dense) BackwardPropagation(Z, A map[string]*mat.Dense, D map[string][]bool, y *mat.Dense) (*mat.Dense, map[string]*mat.Dense, map[string]*mat.Dense) {
-	m := y.RawMatrix().Cols     // number of training examples
+	m := y.RawMatrix().Rows     // number of training examples
 	L := len(dn.Parameters) / 2 // number of layers
 
 	dZ := make(map[string]*mat.Dense) // derivatives of the linear function Z
@@ -113,11 +121,11 @@ func (dn *Dense) BackwardPropagation(Z, A map[string]*mat.Dense, D map[string][]
 	dA := make(map[string]*mat.Dense) // derivatives of the activation function A
 
 	dZ[strconv.Itoa(L)] = ngo.Scale(1./float64(m), ngo.Sub(A[strconv.Itoa(L)], y))
-	dW[strconv.Itoa(L)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(L)], A[strconv.Itoa(L-1)].T()), ngo.Scale(dn.L2Regularization/float64(m), dn.Parameters["W"+strconv.Itoa(L)]))
-	db[strconv.Itoa(L)] = ngo.Sum(dZ[strconv.Itoa(L)], ngo.OverColumns)
+	dW[strconv.Itoa(L)] = ngo.Add(ngo.MatMul(A[strconv.Itoa(L-1)].T(), dZ[strconv.Itoa(L)]), ngo.Scale(dn.L2Regularization/float64(m), dn.Parameters["W"+strconv.Itoa(L)]))
+	db[strconv.Itoa(L)] = ngo.Sum(dZ[strconv.Itoa(L)], ngo.OverRows)
 
 	for l := L - 1; l > 0; l-- {
-		dA[strconv.Itoa(l)] = ngo.MatMul(dn.Parameters["W"+strconv.Itoa(l+1)].T(), dZ[strconv.Itoa(l+1)])
+		dA[strconv.Itoa(l)] = ngo.MatMul(dZ[strconv.Itoa(l+1)], dn.Parameters["W"+strconv.Itoa(l+1)].T())
 
 		// apply dropout
 		if dn.Dropout > 0 {
@@ -125,11 +133,11 @@ func (dn *Dense) BackwardPropagation(Z, A map[string]*mat.Dense, D map[string][]
 		}
 
 		dZ[strconv.Itoa(l)] = ngo.Multiply(dA[strconv.Itoa(l)], dn.Activation.Derivative(Z[strconv.Itoa(l)]))
-		dW[strconv.Itoa(l)] = ngo.Add(ngo.MatMul(dZ[strconv.Itoa(l)], A[strconv.Itoa(l-1)].T()), ngo.Scale(dn.L2Regularization/float64(m), dn.Parameters["W"+strconv.Itoa(l)]))
-		db[strconv.Itoa(l)] = ngo.Sum(dZ[strconv.Itoa(l)], ngo.OverColumns)
+		dW[strconv.Itoa(l)] = ngo.Add(ngo.MatMul(A[strconv.Itoa(l-1)].T(), dZ[strconv.Itoa(l)]), ngo.Scale(dn.L2Regularization/float64(m), dn.Parameters["W"+strconv.Itoa(l)]))
+		db[strconv.Itoa(l)] = ngo.Sum(dZ[strconv.Itoa(l)], ngo.OverRows)
 	}
 
-	dA[strconv.Itoa(0)] = ngo.MatMul(dn.Parameters["W"+strconv.Itoa(1)].T(), dZ[strconv.Itoa(1)])
+	dA[strconv.Itoa(0)] = ngo.MatMul(dZ[strconv.Itoa(1)], dn.Parameters["W"+strconv.Itoa(1)].T())
 
 	return dA[strconv.Itoa(0)], dW, db
 }

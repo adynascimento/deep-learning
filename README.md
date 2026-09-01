@@ -69,6 +69,21 @@ A comprehensive deep learning library written in Go from scratch, featuring supp
 - ✔ Mathematical utilities (PCA, StandardScaler, Sampling Functions)
 - ✔ Mini-batch training with optional data shuffling
 
+## 📐 Data Representation
+
+This library follows a **samples-first** convention for data representations, where the first dimension represents the number of samples.
+
+For 2D `*mat.Dense` matrices used by Multi-Layer Perceptron (MLP), Dense layers, NLP vectorizers, PCA, and StandardScaler, data follows the `(nSamples, nFeatures)` layout:
+
+- **Rows** represent samples (observations)
+- **Columns** represent features
+
+CNN inputs are conceptually represented as a 4D tensor with shape `(nSamples, nChannels, height, width)`. In Go, they are represented using a `[][]*mat.Dense` layout:
+
+- The outer slice contains the samples
+- Each sample contains one `*mat.Dense` matrix per channel
+- Each channel matrix has shape `(height, width)`.
+
 ## 🎯 Usage Examples
 
 ### 1. MLP for Regression
@@ -236,8 +251,8 @@ import (
 func main() {
 	// define search space
 	space := mlp.SearchSpace{
-		InputDim:          xTrain.RawMatrix().Rows,
-		OutputDim:         yTrain.RawMatrix().Rows,
+		InputDim:          xTrain.RawMatrix().Cols,
+		OutputDim:         yTrain.RawMatrix().Cols,
 		NLayersRange:      mlp.IntRange{Min: 3, Max: 5},         // minimum and maximum number of layers
 		NHiddenRange:      mlp.IntRange{Min: 50, Max: 100},      // minimum and maximum number of hidden units per layers
 		LearningRateRange: mlp.FloatRange{Min: 1e-4, Max: 1e-2}, // minimum and maximum of learning rate

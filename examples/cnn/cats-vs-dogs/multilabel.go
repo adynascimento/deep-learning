@@ -28,9 +28,9 @@ func main() {
 	x = ngo.Apply(applyNormalization, x)
 	v = ngo.Apply(applyNormalization, v)
 
-	xTrain := make([][]*mat.Dense, x.RawMatrix().Cols)
-	for n := range xTrain {
-		data := mat.Col(nil, n, x)
+	xTrain := make([][]*mat.Dense, x.RawMatrix().Rows)
+	for i := range xTrain {
+		data := x.RawRowView(i)
 
 		rgb := make([][]float64, 3)
 		for idx := 0; idx < len(data); idx += 3 {
@@ -39,14 +39,14 @@ func main() {
 			rgb[2] = append(rgb[2], data[idx+2])
 		}
 
-		xTrain[n] = make([]*mat.Dense, 3)
-		xTrain[n][0] = mat.NewDense(100, 100, rgb[0])
-		xTrain[n][1] = mat.NewDense(100, 100, rgb[1])
-		xTrain[n][2] = mat.NewDense(100, 100, rgb[2])
+		xTrain[i] = make([]*mat.Dense, 3)
+		xTrain[i][0] = mat.NewDense(100, 100, rgb[0])
+		xTrain[i][1] = mat.NewDense(100, 100, rgb[1])
+		xTrain[i][2] = mat.NewDense(100, 100, rgb[2])
 	}
-	xTest := make([][]*mat.Dense, v.RawMatrix().Cols)
-	for n := range xTest {
-		data := mat.Col(nil, n, v)
+	xTest := make([][]*mat.Dense, v.RawMatrix().Rows)
+	for i := range xTest {
+		data := v.RawRowView(i)
 
 		rgb := make([][]float64, 3)
 		for idx := 0; idx < len(data); idx += 3 {
@@ -55,10 +55,10 @@ func main() {
 			rgb[2] = append(rgb[2], data[idx+2])
 		}
 
-		xTest[n] = make([]*mat.Dense, 3)
-		xTest[n][0] = mat.NewDense(100, 100, rgb[0])
-		xTest[n][1] = mat.NewDense(100, 100, rgb[1])
-		xTest[n][2] = mat.NewDense(100, 100, rgb[2])
+		xTest[i] = make([]*mat.Dense, 3)
+		xTest[i][0] = mat.NewDense(100, 100, rgb[0])
+		xTest[i][1] = mat.NewDense(100, 100, rgb[1])
+		xTest[i][2] = mat.NewDense(100, 100, rgb[2])
 	}
 	yTrain := LoadDataFromFile("../../dataset/cats-vs-dogs/train_label.csv")
 	yTest := LoadDataFromFile("../../dataset/cats-vs-dogs/test_label.csv")
@@ -73,7 +73,7 @@ func main() {
 	neural.AddMaxPooling2DLayer(2, 2)
 	neural.AddConv2DLayer(32, 3, 1)
 	neural.AddMaxPooling2DLayer(2, 2)
-	neural.AddDenseLayer([]int{32, yTrain.RawMatrix().Rows})
+	neural.AddDenseLayer([]int{32, yTrain.RawMatrix().Cols})
 
 	// optimizer to train the model
 	model := neural.NewTrainer(cnn.TrainerConfig{
