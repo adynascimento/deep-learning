@@ -69,6 +69,21 @@ A comprehensive deep learning library written in Go from scratch, featuring supp
 - ✔ Mathematical utilities (PCA, StandardScaler, Sampling Functions)
 - ✔ Mini-batch training with optional data shuffling
 
+## 📐 Data Representation
+
+This library follows a **samples-first** convention for data representations, where the first dimension represents the number of samples.
+
+For 2D `*mat.Dense` matrices used by Multi-Layer Perceptron (MLP), Dense layers, NLP vectorizers, PCA, and StandardScaler, data follows the `(nSamples, nFeatures)` layout:
+
+- **Rows** represent samples (observations)
+- **Columns** represent features
+
+CNN inputs are conceptually represented as a 4D tensor with shape `(nSamples, nChannels, height, width)`. In Go, they are represented using a `[][]*mat.Dense` layout:
+
+- The outer slice contains the samples
+- Each sample contains one `*mat.Dense` matrix per channel
+- Each channel matrix has shape `(height, width)`.
+
 ## 🎯 Usage Examples
 
 ### 1. MLP for Regression
