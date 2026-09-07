@@ -159,6 +159,7 @@ func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...fun
 
 		var totalLoss float64
 		var totalWeight float64
+		var totalMetric float64
 
 		// generate a shuffled sample order for the current epoch
 		if config.Shuffle {
@@ -190,22 +191,35 @@ func (cm *cnnModel) Fit(xTrain [][]*mat.Dense, yTrain *mat.Dense, options ...fun
 			}
 
 			// forward propagation
-			yPred, Z, A, D := cm.ForwardPropagation(xBatch, true)
+			yHat, Z, A, D := cm.ForwardPropagation(xBatch, true)
 
 			// loss function
-			loss := cm.LossFunction(yPred, yBatch, cm.DenseLayer.Parameters, cm.DenseLayer.L2Regularization)
+			loss := cm.LossFunction(yBatch, yHat, cm.DenseLayer.Parameters, cm.DenseLayer.L2Regularization)
 			totalLoss += loss * batchSize
 			totalWeight += batchSize
+
+			// calculate metrics only for classification modes
+			if cm.Mode != nncore.ModeRegression {
+				batchMetric := cm.CalculateMetric(yBatch, yHat)
+				totalMetric += batchMetric * batchSize
+			}
 
 			// backward propagation with update parameters (optimization algorithm)
 			cm.BackwardPropagation(Z, A, D, yBatch)
 		}
 
+		// elapsed time for the current epoch
+		elapsed := time.Since(start)
+
 		// print the loss every x iterations
 		meanLoss := totalLoss / totalWeight
 		if config.Verbose && (i%config.LogInterval == 0 || i == 1 || i == cm.Epochs) {
-			fmt.Printf(" | t: %7.2fms | loss: %.6e | acc: %.4f \n",
-				float64(time.Since(start))/float64(time.Millisecond), meanLoss, cm.Evaluate(xTrain, yTrain))
+			if cm.Mode == nncore.ModeRegression {
+				fmt.Printf(" | t: %7.2fms | loss: %.4e \n", float64(elapsed)/float64(time.Millisecond), meanLoss)
+			} else {
+				meanMetric := totalMetric / totalWeight
+				fmt.Printf(" | t: %7.2fms | loss: %.4e | acc: %.4f \n", float64(elapsed)/float64(time.Millisecond), meanLoss, meanMetric)
+			}
 		}
 		losses = append(losses, meanLoss)
 	}
@@ -222,7 +236,11 @@ func (cm *cnnModel) Predict(x [][]*mat.Dense) *mat.Dense {
 // evaluate model
 func (cm *cnnModel) Evaluate(x [][]*mat.Dense, y *mat.Dense) float64 {
 	yPred := cm.Predict(x)
+	return cm.CalculateMetric(y, yPred)
+}
 
+// calculate metric
+func (cm *cnnModel) CalculateMetric(y, yPred *mat.Dense) float64 {
 	metric := 0.0
 	switch cm.Mode {
 	case nncore.ModeRegression:

@@ -46,6 +46,7 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig
 
 		var totalLoss float64
 		var totalWeight float64
+		var totalMetric float64
 
 		// generate a shuffled sample order for the current epoch
 		if config.Shuffle {
@@ -79,9 +80,15 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig
 			yHat, Z, A, D := nm.Dense.ForwardPropagation(xBatch, true)
 
 			// loss function
-			loss := nm.LossFunction(yHat, yBatch, nm.Dense.Parameters, nm.Dense.L2Regularization)
+			loss := nm.LossFunction(yBatch, yHat, nm.Dense.Parameters, nm.Dense.L2Regularization)
 			totalLoss += loss * batchSize
 			totalWeight += batchSize
+
+			// calculate metrics only for classification modes
+			if nm.Mode != nncore.ModeRegression {
+				batchMetric := nm.CalculateMetric(yBatch, yHat)
+				totalMetric += batchMetric * batchSize
+			}
 
 			// backward propagation
 			_, dW, db := nm.Dense.BackwardPropagation(Z, A, D, yBatch)
@@ -90,14 +97,17 @@ func (nm *neuralModel) Fit(xTrain, yTrain *mat.Dense, options ...func(*fitConfig
 			nm.Dense.UpdateParameters(dW, db, nm.LearningRate)
 		}
 
+		// elapsed time for the current epoch
+		elapsed := time.Since(start)
+
 		// print the loss every x iterations
 		meanLoss := totalLoss / totalWeight
 		if config.Verbose && (i%config.LogInterval == 0 || i == 1 || i == nm.Epochs) {
 			if nm.Mode == nncore.ModeRegression {
-				fmt.Printf(" | t: %7.2fms | loss: %.6e \n", float64(time.Since(start))/float64(time.Millisecond), meanLoss)
+				fmt.Printf(" | t: %7.2fms | loss: %.4e \n", float64(elapsed)/float64(time.Millisecond), meanLoss)
 			} else {
-				fmt.Printf(" | t: %7.2fms | loss: %.6e | acc: %.4f \n",
-					float64(time.Since(start))/float64(time.Millisecond), meanLoss, nm.Evaluate(xTrain, yTrain))
+				meanMetric := totalMetric / totalWeight
+				fmt.Printf(" | t: %7.2fms | loss: %.4e | acc: %.4f \n", float64(elapsed)/float64(time.Millisecond), meanLoss, meanMetric)
 			}
 		}
 		losses = append(losses, meanLoss)
@@ -115,7 +125,11 @@ func (nm *neuralModel) Predict(x *mat.Dense) *mat.Dense {
 // evaluate model
 func (nm *neuralModel) Evaluate(x, y *mat.Dense) float64 {
 	yPred := nm.Predict(x)
+	return nm.CalculateMetric(y, yPred)
+}
 
+// calculate metric
+func (nm *neuralModel) CalculateMetric(y, yPred *mat.Dense) float64 {
 	metric := 0.0
 	switch nm.Mode {
 	case nncore.ModeRegression:
